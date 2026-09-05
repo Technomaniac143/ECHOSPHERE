@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { Chart, RadialChart, registerables } from "chart.js";
+import { Chart, RadarController, RadialLinearScale, PointElement, LineElement, Filler, ArcElement, CategoryScale, Legend, Tooltip, registerables } from "chart.js";
 import { cn } from "@/lib/utils";
 
-Chart.register(...registerables);
+Chart.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, ArcElement, CategoryScale, Legend, Tooltip, ...registerables);
 
 interface RadarChartProps {
   data: Array<{ label: string; score: number }>;
@@ -93,7 +93,7 @@ export function RadarChart({
             },
             pointLabels: {
               display: showLabels,
-              font: { size: 11, weight: "500" },
+              font: { size: 11, weight: 500 },
               color: "#334155",
             },
           },

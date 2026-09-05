@@ -33,20 +33,24 @@ async function request<T>(
 ): Promise<T> {
   const url = `${apiBaseUrl({ base })}${path}`;
 
-  const headers: Record<string, string | string[] | undefined> = {
+  const headersInit: Record<string, string | string[]> = {
     Accept: "application/json",
-    ...options.headers,
   };
+  if (options.headers) {
+    Object.entries(options.headers).forEach(([k, v]) => {
+      if (v != null && v !== "") headersInit[k] = v as string | string[];
+    });
+  }
 
   // Automatically stringify JSON bodies and set content-type.
   if (options.body && typeof options.body === "object" && !(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
+    headersInit["Content-Type"] = "application/json";
     options.body = JSON.stringify(options.body);
   }
 
   const res = await fetch(url, {
     ...options,
-    headers,
+    headers: headersInit,
     credentials: "include",
   });
 

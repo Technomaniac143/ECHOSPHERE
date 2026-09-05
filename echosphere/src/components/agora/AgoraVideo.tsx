@@ -269,7 +269,7 @@ export function AgoraStatusBar({
         )}
         title={videoMuted ? "Enable camera" : "Disable camera"}
       >
-        {videoMuted ? <VideoCamera className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+        {videoMuted ? <Video className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
         {videoMuted ? "Video off" : "Camera"}
       </button>
 

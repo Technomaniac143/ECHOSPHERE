@@ -248,9 +248,10 @@ export interface InterviewSetup {
   instructions?: string;
   sessionId?: string;
   // Populated by AI setup agent after parsing user intent
-  suggestedPersonas?: PersonaKey[];
+  suggestedPersonas?: string[];
   estimatedDuration?: number;
   focusAreas?: string[];
+  mode?: "practice" | "assessment";
 }
 
 export type SessionStatus = "setup" | "lobby" | "in_progress" | "completed" | "ended";

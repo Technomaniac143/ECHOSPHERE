@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import {
   RadarChart,
   BarChart,
-  PolarAreaChart,
 } from "recharts";
 import {
   Card,
