@@ -121,9 +121,11 @@ app.add_middleware(
         "https://www.echosphere.app",
         # Render deployments
         "https://echosphere-backend-2vxu.onrender.com",
-        # Vercel deployments (main + previews)
+        # Vercel deployments (main + previews + project aliases)
         "https://echosphere.vercel.app",
-        "https://echosphere-git-main.vercel.app",
+        "https://echosphere-five.vercel.app",
+        "https://echosphere-git-main-technomaniac143s-projects.vercel.app",
+        "https://echosphere-technomaniac143s-projects.vercel.app",
     ],
     allow_origin_regex=r"https://echosphere.*\.vercel\.app",
     allow_credentials=True,
