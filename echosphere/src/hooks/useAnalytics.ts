@@ -12,8 +12,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE =
   typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000")
-    : "http://localhost:8000";
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "https://echosphere-backend-2vxu.onrender.com")
+    : "https://echosphere-backend-2vxu.onrender.com";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

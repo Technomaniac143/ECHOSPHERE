@@ -162,7 +162,7 @@ export default function SessionPage() {
           console.warn("Mic permission denied or unavailable:", micErr);
         }
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/sessions/${sessionId}/anam-token`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://echosphere-backend-2vxu.onrender.com"}/api/sessions/${sessionId}/anam-token`, {
           method: "POST",
         });
         if (response.ok) {

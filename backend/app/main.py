@@ -111,12 +111,21 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Local development
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        # Production domains
         "https://echosphere.app",
+        "https://www.echosphere.app",
+        # Render deployments
+        "https://echosphere-backend-2vxu.onrender.com",
+        # Vercel deployments (main + previews)
+        "https://echosphere.vercel.app",
+        "https://echosphere-git-main.vercel.app",
     ],
+    allow_origin_regex=r"https://echosphere.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
