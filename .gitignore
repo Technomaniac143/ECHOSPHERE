@@ -65,4 +65,7 @@ Thumbs.db
 SAMPLE FRONTEND/
 FIXED_FILED/
 FIXED_FILED2/
+*.db
+*.sqlite
+
 
