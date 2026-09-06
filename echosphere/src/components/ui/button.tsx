@@ -27,9 +27,10 @@ const buttonVariants = tv({
       sm: "h-8 px-3 text-xs",
       lg: "h-10 px-8 text-sm",
       icon: "h-9 w-9",
+      "icon-sm": "h-8 w-8",
     },
   },
-  defaultVariant: { variant: "default", size: "default" },
+  defaultVariants: { variant: "default", size: "default" },
 });
 
 function Button({

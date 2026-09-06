@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   createAgoraClient,
   createAgoraClientWithMode,
-  type AgoraFacacde,
+  type AgoraFacade,
   type AgoraMuteState,
   type AgoraDeviceState,
   type ConnectionQuality,
@@ -12,20 +12,7 @@ import {
 } from "@/lib/agora/client";
 import type { PersonaKey } from "@/types";
 
-/**
- * useAgora
- *
- * Encapsulates the RTC lifecycle for the interview room:
- * - initialize engine
- * - request mic/camera
- * - join channel (token from backend)
- * - track connection state + quality
- * - mute/unmute
- * - optional screen-share (assessment mode)
- *
- * When AGORA_APP_ID is absent we use the dev mock (clearly labeled) so the UI
- * flow can still be demonstrated offline.
- */
+export type { ConnectionQuality, AgoraFacade, AgoraMuteState, AgoraDeviceState, RtcUser };
 
 export const AGORA_DEV_MODE = !process.env.AGORA_APP_ID;
 
@@ -43,7 +30,7 @@ export function useAgora(
     onError?: (err: Error) => void;
   } = {},
 ) {
-  const [facade, setFacade] = useState<AgoraFacacde | null>(null);
+  const [facade, setFacade] = useState<AgoraFacade | null>(null);
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [quality, setQuality] = useState<ConnectionQuality>("unavailable");
@@ -51,7 +38,7 @@ export function useAgora(
   const [deviceState, setDeviceState] = useState<AgoraDeviceState>({ microphoneSelected: null, cameraSelected: null });
   const [error, setError] = useState<string | null>(null);
   const [joinedUsers, setJoinedUsers] = useState<Map<number, RtcUser>>(new Map());
-  const facadeRef = useRef<AgoraFacacde | null>(null);
+  const facadeRef = useRef<AgoraFacade | null>(null);
   const usersRef = useRef<Map<number, RtcUser>>(new Map());
 
   const devMode = AGORA_DEV_MODE;
@@ -78,7 +65,7 @@ export function useAgora(
   useEffect(() => {
     if (!facade) return;
 
-    facade.onConnectionChange((state) => {
+    facade.onConnectionChange((state: number) => {
       const isConnected =
         state === 3 /* RTC_CONNECTION_STATE_CONNECTED */;
       setConnected(isConnected);
@@ -86,21 +73,21 @@ export function useAgora(
       else onDisconnect?.();
     });
 
-    facade.onQualityUpdate((q) => setQuality(q));
-    facade.onUserJoined((userId, user) => {
+    facade.onQualityUpdate((q: ConnectionQuality) => setQuality(q));
+    facade.onUserJoined((userId: number, user: RtcUser) => {
       const next = new Map(usersRef.current);
       next.set(userId, user);
       usersRef.current = next;
       setJoinedUsers(new Map(next));
     });
-    facade.onUserLeft((userId) => {
+    facade.onUserLeft((userId: number) => {
       const next = new Map(usersRef.current);
       next.delete(userId);
       usersRef.current = next;
       setJoinedUsers(new Map(next));
     });
-    facade.onAudioMutedChange((muted) => setMuteState((prev) => ({ ...prev, audioMuted: muted })));
-    facade.onVideoMutedChange((muted) => setMuteState((prev) => ({ ...prev, videoMuted: muted })));
+    facade.onAudioMutedChange((muted: boolean) => setMuteState((prev) => ({ ...prev, audioMuted: muted })));
+    facade.onVideoMutedChange((muted: boolean) => setMuteState((prev) => ({ ...prev, videoMuted: muted })));
   }, [facade, onConnect, onDisconnect]);
 
   const requestDevices = useCallback(async () => {

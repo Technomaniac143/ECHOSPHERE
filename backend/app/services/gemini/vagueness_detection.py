@@ -205,3 +205,12 @@ def get_vagueness_detector() -> VaguenessDetector:
     if _vagueness_detector is None:
         _vagueness_detector = VaguenessDetector()
     return _vagueness_detector
+
+
+# ── Aliases & Helper Wrappers ────────────────────────────────────────────────
+
+VaguenessDetectionService = VaguenessDetector
+VaguenessFlag = dict
+VaguenessDetectionUnavailable = VaguenessDetectionError
+VaguenessLevel = str
+create_vagueness_detection_service = get_vagueness_detector

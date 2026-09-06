@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AgoraVideoProvider, AgoraConnectionQualityBadge } from "@/components/agora/AgoraVideo";
@@ -51,7 +51,7 @@ function MicLevelIndicator({ level }: { level: number }) {
   );
 }
 
-export default function LobbyPage() {
+function LobbyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId") ?? "";
@@ -612,5 +612,17 @@ function CalibrationRow({
         <div className="w-4 h-4 rounded-full border border-slate-600" />
       )}
     </div>
+  );
+}
+
+export default function LobbyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+      </div>
+    }>
+      <LobbyContent />
+    </Suspense>
   );
 }

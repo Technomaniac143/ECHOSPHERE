@@ -341,3 +341,69 @@ def get_convoai_service() -> AgoraConversationalAI:
     if _convoai_service is None:
         _convoai_service = AgoraConversationalAI()
     return _convoai_service
+
+
+# ── Aliases & Helper Wrappers ────────────────────────────────────────────────
+
+ConvoAIError = AgoraConversationalAIError
+ConvoAIConfigError = AgoraConversationalAIError
+ConvoAIAgentNotRunningError = AgoraConversationalAIError
+ConvoAIUnavailableError = AgoraConversationalAIError
+
+
+async def start_convo_agent(
+    channel_name: str,
+    token: str,
+    agent_name: str = "echosphere-agent",
+    persona_system_prompt: Optional[str] = None,
+    greeting_text: Optional[str] = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Helper wrapper to start a Conversational AI agent session."""
+    system_messages = [persona_system_prompt] if persona_system_prompt else []
+    config = AgoraConversationalAIConfig(
+        agent_name=agent_name,
+        channel_name=channel_name,
+        token=token,
+        system_messages=system_messages,
+        greeting_text=greeting_text or "Hello! I'm your AI interviewer. Let's begin.",
+        **kwargs,
+    )
+    service = get_convoai_service()
+    return await service.start_agent(config)
+
+
+async def stop_convo_agent(agent_id: str) -> dict[str, Any]:
+    """Helper wrapper to stop a Conversational AI agent session."""
+    service = get_convoai_service()
+    return await service.stop_agent(agent_id)
+
+
+async def interrupt_convo_agent(agent_id: str, message: str) -> dict[str, Any]:
+    """Helper wrapper to interrupt / send prompt instruction to a running agent."""
+    service = get_convoai_service()
+    return await service.interrupt_agent(agent_id, message)
+
+
+def build_system_message(
+    persona: str,
+    target_role: str,
+    target_company: Optional[str] = None,
+    difficulty: str = "medium",
+) -> str:
+    """Build initial system prompt message for an interviewer persona."""
+    company_str = f" at {target_company}" if target_company else ""
+    return (
+        f"You are the {persona.upper()} interviewer for a candidate applying for {target_role}{company_str}. "
+        f"Current difficulty level is {difficulty}. Ask clear, focused questions, evaluate their depth of knowledge, "
+        f"and adapt based on their claims."
+    )
+
+
+def get_disclosure_text() -> str:
+    """Get standard spoken AI disclosure message prior to evaluative questions."""
+    return (
+        "Hello! Welcome to your interview with EchoSphere. I am an AI-driven interview panel. "
+        "This session will be recorded and evaluated across technical, product, and behavioral competencies. "
+        "Let's begin."
+    )

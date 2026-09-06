@@ -670,7 +670,7 @@ export default function CandidateProfilePage() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-slate-400 hover:text-rose-500"
-                          onClick={() => removeCertificate(cert.id)}
+                          onClick={() => cert.id && removeCertificate(cert.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

@@ -24,7 +24,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
-  Speakerphone,
+  Megaphone,
   Headphones,
 } from "lucide-react";
 import Link from "next/link";
@@ -84,7 +84,7 @@ function TranscriptBubble({
       >
         {isAgent && meta && (
           <div className="flex items-center gap-2 mb-1">
-            <PersonaAvatar persona={persona} size="sm" />
+            <PersonaAvatar persona={persona || "technical"} size="sm" />
             <span
               className="text-[11px] font-semibold"
               style={{ color: meta.color }}
@@ -227,6 +227,15 @@ export default function SessionPage() {
       "I want to cancel my subscription but your cancellation process is incredibly complicated. What do you do?",
       "I found a bug that caused me to lose data. I'm not happy. How do you respond?",
     ],
+    domain: [
+      "Let's dive into your domain expertise. Walk me through a complex scenario you solved in your field.",
+    ],
+    leadership: [
+      "Describe a time you had to make a technical decision with incomplete information.",
+    ],
+    culture: [
+      "What kind of team environment helps you produce your best work?",
+    ],
   };
 
   // Initialize
@@ -236,7 +245,7 @@ export default function SessionPage() {
       await requestDevices();
       try {
         const session = await sessionApi.get(sessionId);
-        if (session.data.setup?.company) {
+        if ((session.data as any)?.company) {
           // Extract candidate name from profile if available
         }
       } catch {}

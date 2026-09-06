@@ -278,3 +278,30 @@ class InterviewManager:
         query = query.order_by(Session.started_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+
+# ── Aliases & Factories ──────────────────────────────────────────────────────
+
+InterviewSession = InterviewManager
+SessionStore = InterviewManager
+SessionNotFoundError = InterviewNotFoundError
+
+
+class SessionStateTransitionError(Exception):
+    """Invalid session state transition."""
+    pass
+
+
+class SessionAlreadyStartedError(Exception):
+    """Session already started."""
+    pass
+
+
+class SessionAlreadyEndedError(Exception):
+    """Session already ended."""
+    pass
+
+
+def create_interview_manager(db: AsyncSession) -> InterviewManager:
+    """Create an InterviewManager instance."""
+    return InterviewManager(db)

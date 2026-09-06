@@ -218,6 +218,17 @@ export const PERSONAS = {
     signatureQuestion: "Tell me about a time you had to deliver under a tight deadline.",
     prompt: "You are Daniel Torres, a Hiring Manager conducting an interview.\nFocus on ownership, delivery, team collaboration, and practical problem-solving.\nOne question at a time. Push for concrete examples. Stay in character.",
   },
+  customer: {
+    key: "customer",
+    name: "Alex Taylor",
+    role: "Customer Representative",
+    label: "Customer",
+    color: "#06b6d4",
+    avatar: "AT",
+    style: "demanding, practical, scenario-driven",
+    signatureQuestion: "I'm having a critical issue with your system in production. How are you going to fix this?",
+    prompt: "You are Alex Taylor, playing the role of an enterprise customer during a scenario.\nTest communication under pressure, requirement gathering, and incident response.\nOne question at a time. Stay in character.",
+  },
 } as const;
 
 export type PersonaKey = keyof typeof PERSONAS;
@@ -267,6 +278,9 @@ export interface Session {
   difficulty: string;
   mode: "practice" | "assessment";
   status: SessionStatus;
+  setup?: InterviewSetup;
+  targetRole?: string;
+  targetCompany?: string;
   portalCode?: string | null;
   config?: Record<string, unknown>;
   agoraChannelName?: string | null;
@@ -304,8 +318,9 @@ export interface WhiteboardState {
 export interface CompetencyScore {
   competency: string;
   score: number;
-  maxScore: number;
-  evidence: string[];
+  confidence?: number;
+  evidence?: any;
+  evidenceLinks?: any[];
   strengths?: string[];
   weaknesses?: string[];
   rater?: string;
@@ -329,33 +344,43 @@ export interface ScoreBreakdown {
 export interface Report {
   id: string;
   sessionId: string;
-  candidateName: string;
-  company: string;
-  role: string;
-  domain: string;
-  difficulty: string;
-  scores: ScoreBreakdown;
-  competencyScores: CompetencyScore[];
-  panel: PanelAssessment[];
-  panelDisagreement: PanelDisagreementItem[];
-  strengths: string[];
-  weaknesses: string[];
-  roadmap: string[];
+  candidateName?: string;
+  company?: string;
+  role?: string;
+  domain?: string;
+  difficulty?: string;
+  overallScore?: number;
+  startedAt?: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  scores?: ScoreBreakdown;
+  competencyScores?: CompetencyScore[];
+  panel?: PanelAssessment[];
+  panelDisagreement?: PanelDisagreementItem[];
+  strengths?: string[];
+  weaknesses?: string[];
+  roadmap?: string[];
   recommendations?: string[];
   transcriptUrl?: string | null;
-  evidence: ReportEvidence[];
-  timeline: ReportTimelineEvent[];
-  createdAt: string;
+  evidence?: ReportEvidence[];
+  evidenceLinks?: any[];
+  timeline?: ReportTimelineEvent[];
+  createdAt?: string;
+  generatedAt?: string;
 }
 
 export interface ReportEvidence {
-  id: string;
-  competency: string;
-  quote: string;
+  id?: string;
+  competency?: string;
+  quote?: string;
   text?: string;
-  timestamp?: number | null;
+  excerpt?: string;
+  timestamp?: string | number | null;
   turnIndex?: number | null;
+  transcriptTurnId?: string;
 }
+
+export type EvidenceLink = ReportEvidence;
 
 export interface ReportTimelineEvent {
   timestamp: string;
@@ -366,12 +391,14 @@ export interface ReportTimelineEvent {
 export interface PanelDisagreementItem {
   persona: string;
   personaLabel?: string;
-  competency: string;
+  competency?: string;
   score?: number;
   summary: string;
   strengths?: string[];
   concerns?: string[];
 }
+
+export type PanelPerspective = PanelDisagreementItem;
 
 // ── API Envelopes ──
 

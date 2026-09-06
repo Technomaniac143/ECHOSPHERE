@@ -23,6 +23,11 @@ class AuthError(Exception):
     pass
 
 
+class UnsupportedProviderError(AuthError):
+    """Unsupported authentication provider error."""
+    pass
+
+
 class AuthService:
     """Service for authentication operations."""
     

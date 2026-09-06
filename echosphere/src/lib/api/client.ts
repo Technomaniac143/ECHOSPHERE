@@ -33,12 +33,14 @@ async function request<T>(
 ): Promise<T> {
   const url = `${apiBaseUrl({ base })}${path}`;
 
-  const headersInit: Record<string, string | string[]> = {
+  const headersInit: Record<string, string> = {
     Accept: "application/json",
   };
   if (options.headers) {
     Object.entries(options.headers).forEach(([k, v]) => {
-      if (v != null && v !== "") headersInit[k] = v as string | string[];
+      if (v != null && v !== "") {
+        headersInit[k] = Array.isArray(v) ? v.join(", ") : String(v);
+      }
     });
   }
 
@@ -187,7 +189,7 @@ export const organizationApi = {
   },
   candidate: (id: string) => api.get<{ data: import("@/types").OrgCandidate }>(`/api/organizations/candidates/${id}`),
   analytics: (batchId?: string) =>
-    api.get<{ data: Record<string, unknown> }>(`/api/batches/${batchId ?? "latest"}/analytics`),
+    api.get<{ data: Record<string, unknown> }>(`/api/analytics/batches/${batchId ?? "latest"}/analytics`),
 };
 
 // ---------- Typed error handling ----------

@@ -114,6 +114,10 @@ class ConvoAIAgentConfig(BaseModel):
         }
 
 
+# Alias for channel config
+AgoraChannelConfig = ConvoAIAgentConfig
+
+
 class ConvoAIStartRequest(BaseModel):
     """Request to start a ConvoAI agent session."""
 

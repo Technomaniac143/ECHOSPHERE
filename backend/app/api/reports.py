@@ -1,7 +1,7 @@
 """Report generation routes — final assessment reports with evidence."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -187,32 +187,24 @@ async def get_roadmap(
 ) -> dict:
     """Get the candidate's roadmap based on this interview."""
     from app.models.roadmap import Roadmap
-    from app.models.user import User
-    
+
     result = await db.execute(
-        select(Roadmap).where(Roadmap.student_id == session_id[:8])  # Simplified lookup
+        select(Roadmap).where(Roadmap.student_id == session_id[:8])
     )
     roadmap = result.scalar_one_or_none()
-    
-    if roadmap:
-        return {
-            "student_id": roadmap.student_id,
-            "competency_ledger": roadmap.competency_ledger,
-            "updated_at": roadmap.updated_at,
-        }
-    
-    # Generate a fresh roadmap
+
+    if not roadmap:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "No roadmap found for this session. "
+                "Roadmaps are generated after an interview is fully scored. "
+                "Ensure the session is completed and the report has been processed."
+            ),
+        )
+
     return {
-        "student_id": session_id[:8],
-        "competency_ledger": {
-            "Technical": {"score": 75, "progress": 0.75, "trend": "improving"},
-            "Problem Solving": {"score": 70, "progress": 0.70, "trend": "stable"},
-            "Communication": {"score": 80, "progress": 0.80, "trend": "improving"},
-            "Product Thinking": {"score": 65, "progress": 0.65, "trend": "needs_work"},
-            "Leadership": {"score": 72, "progress": 0.72, "trend": "stable"},
-            "Behavioral": {"score": 78, "progress": 0.78, "trend": "improving"},
-            "Adaptability": {"score": 74, "progress": 0.74, "trend": "stable"},
-        },
-        "updated_at": "now",
-        "generated_from_session": session_id,
+        "student_id": roadmap.student_id,
+        "competency_ledger": roadmap.competency_ledger,
+        "updated_at": roadmap.updated_at.isoformat() if roadmap.updated_at else None,
     }

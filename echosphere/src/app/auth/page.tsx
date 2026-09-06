@@ -2,10 +2,15 @@
 import { SignIn, SignUp } from "@clerk/nextjs";
 import { ArrowRight, User, Building2, FileCode } from "lucide-react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export default function AuthPage() {
   return (
-    <div className="relative min-h-screen flex flex-col">
+    <div className="relative min-h-screen bg-background text-foreground flex flex-col">
+      {/* Top right theme toggle */}
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle />
+      </div>
       {/* Background */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div

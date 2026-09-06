@@ -33,6 +33,24 @@ KNOWN_DOMAINS = [
 ]
 
 
+class SetupAgentError(Exception):
+    """Base error for SetupAgent."""
+    pass
+
+
+class SetupAgentParseError(SetupAgentError):
+    """Failed to parse interview setup."""
+    pass
+
+
+SetupParseResult = SetupParseResponse
+
+
+def build_setup_prompt_for_display(user_input: str) -> str:
+    """Format setup prompt for display."""
+    return f"Interview setup request: {user_input}"
+
+
 class SetupAgent:
     """Parses free-text interview setup requests into structured configuration."""
 
@@ -285,3 +303,13 @@ def get_setup_agent() -> SetupAgent:
     if _setup_agent is None:
         _setup_agent = SetupAgent()
     return _setup_agent
+
+
+async def parse_interview_setup(
+    user_input: str,
+    mode: str = "practice",
+    existing_profile: dict[str, Any] | None = None,
+) -> SetupParseResponse:
+    """Helper wrapper for parsing interview setup."""
+    agent = get_setup_agent()
+    return await agent.parse(user_input, mode, existing_profile)

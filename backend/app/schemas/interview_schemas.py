@@ -166,3 +166,38 @@ class InterviewEndRequest(BaseModel):
     """Request to end an interview."""
     session_id: str
     reason: Optional[str] = None  # "completed", "abandoned", "timeout", "user_request"
+
+
+# Aliases and Additional Response Schemas
+SetupParseResponse = InterviewSetupResponse
+InterviewSetupConfirmRequest = InterviewConfirmationRequest
+
+
+class InterviewHistoryResponse(BaseModel):
+    """Interview history item."""
+    id: str
+    target_role: str
+    target_company: Optional[str] = None
+    target_domain: Optional[str] = None
+    status: str
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    created_at: datetime
+    overall_score: Optional[float] = None
+
+
+class InterviewDetailResponse(BaseModel):
+    """Detailed view of an interview session."""
+    id: str
+    mode: str
+    status: str
+    target_role: str
+    target_company: Optional[str] = None
+    target_domain: Optional[str] = None
+    personas: list[str] = []
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    created_at: datetime
+    overall_score: Optional[float] = None
+    report_id: Optional[str] = None
+

@@ -416,6 +416,9 @@ class ReportGenerationError(Exception):
     pass
 
 
+ReportNotFoundError = ReportGenerationError
+
+
 class ReportGeneratorService:
     """Service for generating final interview reports.
 
@@ -906,3 +909,6 @@ def create_report_generator(
         ReportGeneratorService instance.
     """
     return ReportGeneratorService(scoring_engine=scoring_engine)
+
+
+ReportGenerator = ReportGeneratorService

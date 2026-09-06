@@ -235,3 +235,48 @@ def get_recording_service() -> AgoraCloudRecording:
     if _recording_service is None:
         _recording_service = AgoraCloudRecording()
     return _recording_service
+
+
+# ── Aliases & Helper Wrappers ────────────────────────────────────────────────
+
+CloudRecordingError = AgoraRecordingError
+CloudRecordingStartError = AgoraRecordingError
+CloudRecordingStopError = AgoraRecordingError
+CloudRecordingNotFoundError = AgoraRecordingError
+
+
+async def start_cloud_recording(
+    channel_name: str,
+    uid: str = "recording_bot",
+    token: str = "",
+    storage_config: Optional[dict[str, Any]] = None,
+    recording_config: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Start cloud recording helper."""
+    service = get_recording_service()
+    st_cfg = storage_config or DEFAULT_STORAGE_CONFIG
+    rec_cfg = recording_config or DEFAULT_RECORDING_CONFIG
+    return await service.start_recording(
+        channel_name=channel_name,
+        uid=uid,
+        token=token,
+        storage_config=st_cfg,
+        recording_config=rec_cfg,
+    )
+
+
+async def stop_cloud_recording(recording_id: str) -> dict[str, Any]:
+    """Stop cloud recording helper."""
+    service = get_recording_service()
+    return await service.stop_recording(recording_id)
+
+
+async def get_recording_status(recording_id: str) -> dict[str, Any]:
+    """Get recording status helper."""
+    service = get_recording_service()
+    return await service.get_recording_status(recording_id)
+
+
+def build_recording_reference(recording_id: str, channel_name: str) -> str:
+    """Build a recording reference string/URL."""
+    return f"agora-rec://{channel_name}/{recording_id}"

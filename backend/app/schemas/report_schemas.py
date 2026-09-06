@@ -75,6 +75,9 @@ class ReportDetail(ReportSummary):
     interview_timeline: list[dict] = []  # [{persona, start_time, end_time, topic}]
 
 
+ReportResponse = ReportDetail
+
+
 class ReportListResponse(BaseModel):
     """Paginated list of reports."""
     reports: list[ReportSummary]

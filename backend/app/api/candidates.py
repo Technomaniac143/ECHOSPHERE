@@ -180,18 +180,57 @@ async def upload_certificate(
     request: CertificateCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Upload a certificate."""
-    cert = {
-        "id": "cert_" + str(hash(request.certificate_name))[:8],
+    """
+    Upload a certificate — persisted to the database.
+    The certificate is stored as a JSON entry appended to the candidate's
+    skills/certificates JSON column (User.skills field stores JSON).
+    """
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+
+    # Look up the candidate (simplified — real auth would provide user_id)
+    result = await db.execute(select(User).where(User.role == "student"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    # Parse existing certificates from the skills JSON field
+    try:
+        existing: list = _json.loads(user.skills) if user.skills else []
+        if not isinstance(existing, list):
+            existing = []
+    except (_json.JSONDecodeError, TypeError):
+        existing = []
+
+    cert_id = f"cert_{hash(request.certificate_name) & 0xFFFFFF:06x}"
+    created_at = _dt.now(_tz.utc).isoformat()
+
+    new_cert = {
+        "id": cert_id,
         "name": request.certificate_name,
         "issuer": request.issuer,
         "issue_date": request.issue_date,
         "credential_url": request.credential_url,
         "document_url": request.document_url,
-        "created_at": "now",
+        "created_at": created_at,
     }
-    
-    return cert
+    existing.append(new_cert)
+
+    user.skills = _json.dumps(existing)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to persist certificate: {exc}",
+        )
+
+    return new_cert
 
 
 @router.post("/setup/parse", response_model=SetupParseResponse)

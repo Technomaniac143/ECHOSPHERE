@@ -15,12 +15,6 @@ class Speaker(str, enum.Enum):
     AGENT = "agent"
 
 
-class Session(Base):
-    """Placeholder for FK reference."""
-    __tablename__ = "sessions"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-
-
 class TranscriptTurn(Base):
     __tablename__ = "transcript_turns"
 
@@ -79,7 +73,6 @@ class Report(Base):
 
     # Relationships
     session = relationship("Session", back_populates="report")
-    candidate = relationship("User", back_populates="reports")
 
 
 class Roadmap(Base):

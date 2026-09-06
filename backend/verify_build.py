@@ -15,10 +15,10 @@ def check_import(module_path, import_name):
     """Try to import a module and report result."""
     try:
         __import__(import_name)
-        successes.append(f"✓ {module_path}")
+        successes.append(f"[OK] {module_path}")
         return True
     except Exception as e:
-        errors.append(f"✗ {module_path}: {type(e).__name__}: {e}")
+        errors.append(f"[FAIL] {module_path}: {type(e).__name__}: {e}")
         return False
 
 # Agora service
@@ -56,7 +56,7 @@ check_import("email/__init__.py", "app.services.email")
 
 # Print results
 print("=" * 60)
-print("ECHO SPHERE BACKEND SERVICES — IMPORT VERIFICATION")
+print("ECHO SPHERE BACKEND SERVICES -- IMPORT VERIFICATION")
 print("=" * 60)
 
 print("\n--- SUCCESSES ---")
@@ -75,5 +75,5 @@ print(f"{'='*60}")
 if errors:
     sys.exit(1)
 else:
-    print("\n✓ All services imported successfully!")
+    print("\n[OK] All services imported successfully!")
     sys.exit(0)

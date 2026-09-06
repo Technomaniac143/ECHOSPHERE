@@ -33,7 +33,8 @@ import {
   Eye,
 } from "lucide-react";
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  pending: { label: "Pending", color: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
   scheduled: { label: "Scheduled", color: "bg-sky-100 text-sky-700 border-sky-200", dot: "bg-sky-500" },
   in_progress: { label: "In Progress", color: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500 animate-pulse" },
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
@@ -214,7 +215,7 @@ export default function OrganizationCandidatesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All roles</SelectItem>
-                    {uniqueRoles.map((r) => (
+                    {uniqueRoles.filter((r): r is string => Boolean(r)).map((r) => (
                       <SelectItem key={r} value={r}>
                         {r}
                       </SelectItem>

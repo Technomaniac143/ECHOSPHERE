@@ -129,27 +129,31 @@ export function CalibrationScreen({
 
     // Honor explicit monitor flags if provided
     if (typeof monitor.cameraOk === "boolean") {
+      const cameraOk = monitor.cameraOk;
       setStatus((prev) => ({
         ...prev,
-        camera: { ok: monitor.cameraOk, note: monitor.cameraOk ? "Good" : "Adjust lighting" },
+        camera: { ok: cameraOk, note: cameraOk ? "Good" : "Adjust lighting" },
       }));
     }
     if (typeof monitor.micOk === "boolean") {
+      const micOk = monitor.micOk;
       setStatus((prev) => ({
         ...prev,
-        microphone: { ok: monitor.micOk, note: monitor.micOk ? "Good" : "Volume low" },
+        microphone: { ok: micOk, note: micOk ? "Good" : "Volume low" },
       }));
     }
     if (typeof monitor.audioOk === "boolean") {
+      const audioOk = monitor.audioOk;
       setStatus((prev) => ({
         ...prev,
-        audio: { ok: monitor.audioOk, note: monitor.audioOk ? "Good" : "Check input" },
+        audio: { ok: audioOk, note: audioOk ? "Good" : "Check input" },
       }));
     }
     if (typeof monitor.connectionOk === "boolean") {
+      const connectionOk = monitor.connectionOk;
       setStatus((prev) => ({
         ...prev,
-        connection: { ok: monitor.connectionOk, note: monitor.connectionOk ? "Good" : "Network weak" },
+        connection: { ok: connectionOk, note: connectionOk ? "Good" : "Network weak" },
       }));
     }
     setStep("feedback");

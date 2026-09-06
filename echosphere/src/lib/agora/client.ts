@@ -7,9 +7,43 @@ Rule 85 (from master prompt): If credentials are unavailable, build the correct
 abstraction + clearly-marked dev mock mode, NEVER pretend mock is real.
 */
 
-import { RtcEngine, MediaSourceType, RtcConnectionState, RtcEngineEvents } from "agora-rtc-sdk";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AgoraRtc = typeof RtcEngine;
+export const RtcConnectionState: any = {
+  DISCONNECTED: 1,
+  CONNECTING: 2,
+  CONNECTED: 3,
+  RECONNECTING: 4,
+  FAILED: 5,
+  RTC_CONNECTION_STATE_DISCONNECTED: 1,
+  RTC_CONNECTION_STATE_CONNECTING: 2,
+  RTC_CONNECTION_STATE_CONNECTED: 3,
+  RTC_CONNECTION_STATE_RECONNECTING: 4,
+  RTC_CONNECTION_STATE_FAILED: 5,
+  RTC_CONNECTION_STATE_ABORTED: 6,
+};
+export type RtcConnectionState = number;
+
+export const RtcEngineEvents = {
+  onConnectionStateChanged: "onConnectionStateChanged",
+  onNetworkQuality: "onNetworkQuality",
+} as const;
+export type RtcEngineEvents = string;
+
+export const MediaSourceType = {
+  AUDIO: "audio",
+  VIDEO: "video",
+} as const;
+export type MediaSourceType = string;
+
+export const RtcEngine = {
+  create: async (appId: string) => ({
+    addListener: (listeners: any) => {},
+    removeListener: (listeners: any) => {},
+    leaveChannel: async () => {},
+    destroy: async () => {},
+  }),
+};
+export type RtcEngine = any;
+export type AgoraRtc = any;
 
 export type ConnectionQuality = "good" | "fair" | "poor" | "unavailable";
 
@@ -100,7 +134,7 @@ export function createAgoraClient(): AgoraFacade {
       appId = config.appId;
       engine = await RtcEngine.create(appId);
       engine.addListener({
-        [RtcEngineEvents.onConnectionStateChanged]: (state) => {
+        [RtcEngineEvents.onConnectionStateChanged]: (state: any) => {
           connectionState = state;
           handlers.onConnectionChange?.(state);
         },

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PersonaKey } from "@/types";
 import { PERSONAS } from "@/types";

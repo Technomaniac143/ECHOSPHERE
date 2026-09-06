@@ -8,6 +8,7 @@ from sqlalchemy import String, DateTime, Enum as SAEnum, ForeignKey, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.session import SessionStatus
 
 
 class WhiteboardEventType(str, enum.Enum):
@@ -24,10 +25,8 @@ class WhiteboardEventType(str, enum.Enum):
     ANSWER_RECEIVED = "answer_received"
 
 
-class Session(Base):
-    """Placeholder — the real Session is in session.py. SQLAlchemy needs this for FK references across files."""
-    __tablename__ = "sessions"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+EventTypeName = WhiteboardEventType
+
 
 
 class WhiteboardEvent(Base):
@@ -82,3 +81,8 @@ class WhiteboardState(Base):
 
     # Relationships
     session = relationship("Session", back_populates="whiteboard_state")
+
+
+def enumerate_difficulty_levels() -> list[str]:
+    return ["easy", "medium", "hard", "adaptive"]
+

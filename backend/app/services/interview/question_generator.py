@@ -463,3 +463,19 @@ _question_generator = QuestionGenerator()
 def get_question_generator() -> QuestionGenerator:
     """Get the question generator singleton."""
     return _question_generator
+
+
+# ── Aliases & Helper Wrappers ────────────────────────────────────────────────
+
+QuestionGeneratorService = QuestionGenerator
+GeneratedQuestion = QuestionResponse
+QuestionType = str
+DifficultyLevel = str
+
+
+class QuestionGenerationError(Exception):
+    """Failed to generate question."""
+    pass
+
+
+create_question_generator = get_question_generator

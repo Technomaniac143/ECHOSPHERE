@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { candidateApi, interviewApi } from "@/lib/api/client";
+import { candidateApi, interviewApi, ApiClientError } from "@/lib/api/client";
+import { useCandidateAnalytics, useLiveAnalytics } from "@/hooks/useAnalytics";
 import type { CandidateProfile, Session } from "@/types";
 import {
   StatCard,
@@ -23,7 +24,58 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { RadarChart } from "@/components/charts/Charts";
-import { User, Briefcase, MapPin, Award, Edit2, ArrowRight, Calendar, CheckCircle, Clock, TrendingUp, Link as LinkIcon } from "lucide-react";
+import {
+  User,
+  Briefcase,
+  Award,
+  Edit2,
+  ArrowRight,
+  Calendar,
+  CheckCircle,
+  Clock,
+  TrendingUp,
+  Link as LinkIcon,
+  AlertCircle,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+
+// ── Error state component ──────────────────────────────────────────────────────
+
+function ErrorBanner({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm">
+      <AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+      <div>
+        <p className="font-semibold text-destructive">{title}</p>
+        <p className="mt-0.5 text-muted-foreground">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Live status indicator ─────────────────────────────────────────────────────
+
+function LiveIndicator({ connected }: { connected: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+        connected
+          ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+          : "bg-muted text-muted-foreground border border-border"
+      }`}
+    >
+      {connected ? (
+        <Wifi className="h-3 w-3" />
+      ) : (
+        <WifiOff className="h-3 w-3" />
+      )}
+      {connected ? "Live" : "Offline"}
+    </span>
+  );
+}
+
+// ── Competency labels ──────────────────────────────────────────────────────────
 
 const COMPETENCIES = [
   "Technical",
@@ -35,39 +87,71 @@ const COMPETENCIES = [
   "Adaptability",
 ];
 
+// ── Page ───────────────────────────────────────────────────────────────────────
+
 export default function CandidateDashboardPage() {
   const { user, loading: authLoading } = useAuth();
+
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [interviews, setInterviews] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [interviewsError, setInterviewsError] = useState<string | null>(null);
+
+  // Real competency analytics from backend
+  const {
+    data: analyticsData,
+    loading: analyticsLoading,
+    error: analyticsError,
+  } = useCandidateAnalytics(user?.id ?? null);
+
+  // Real-time live stream
+  const { snapshot: liveSnapshot, connected: liveConnected } = useLiveAnalytics();
+
+  // ── Data fetching — errors surfaced, not swallowed ────────────────────────
 
   const fetchProfile = async () => {
-    setProfileLoading(true);
+    setProfileError(null);
     try {
       const res = await candidateApi.profile();
       setProfile(res.data);
-    } catch {
-      // profile may not exist yet — that's fine
-    } finally {
-      setProfileLoading(false);
+    } catch (err) {
+      if (err instanceof ApiClientError && err.statusCode === 404) {
+        // Profile simply doesn't exist yet — not an error state
+        setProfile(null);
+      } else {
+        setProfileError(
+          err instanceof ApiClientError
+            ? `Profile load failed: ${err.message}`
+            : "Unexpected error loading profile"
+        );
+      }
     }
   };
 
   const fetchInterviews = async () => {
+    setInterviewsError(null);
     try {
       const res = await interviewApi.list({ limit: 10 });
       setInterviews(res.data ?? []);
-    } catch {
-      // ignore
+    } catch (err) {
+      setInterviewsError(
+        err instanceof ApiClientError
+          ? `Could not load interviews: ${err.message}`
+          : "Unexpected error loading interviews"
+      );
     }
   };
 
   useEffect(() => {
     if (!authLoading) {
-      Promise.all([fetchProfile(), fetchInterviews()]).finally(() => setLoading(false));
+      Promise.all([fetchProfile(), fetchInterviews()]).finally(() =>
+        setPageLoading(false)
+      );
     }
   }, [authLoading]);
+
+  // ── Profile completion ────────────────────────────────────────────────────
 
   const completionFields = [
     { key: "fullName" as const, label: "Name", value: profile?.fullName ?? "" },
@@ -82,64 +166,86 @@ export default function CandidateDashboardPage() {
     { key: "githubUrl" as const, label: "GitHub", value: profile?.githubUrl ?? "" },
     { key: "leetcodeUrl" as const, label: "LeetCode", value: profile?.leetcodeUrl ?? "" },
   ];
-
   const completed = completionFields.filter((f) => f.value).length;
   const completionPct = Math.round((completed / completionFields.length) * 100);
 
-  const upcoming = interviews.filter((s) => s.status === "lobby" || s.status === "in_progress").length;
-  const completedCount = interviews.filter((s) => s.status === "completed").length;
-  const avgScore = interviews.filter((s) => s.status === "completed" && s.setup?.focusAreas).length
-    ? Math.round(
-        interviews
-          .filter((s) => s.status === "completed")
-          .reduce((acc, s) => acc + (s.setup?.focusAreas?.length ?? 0), 0) /
-          Math.max(1, interviews.filter((s) => s.status === "completed").length),
-      )
-    : 0;
+  // ── Derived stats — from real data only ──────────────────────────────────
 
-  // Simulated competency scores from interview history
-  const competencyScores = COMPETENCIES.map((name) => ({
-    label: name,
-    score: Math.round(Math.random() * 30 + 55 + (name === "Technical" ? 10 : 0)),
-  }));
-  const strongest = competencyScores.reduce((a, b) => (a.score > b.score ? a : b));
-  const weakest = competencyScores.reduce((a, b) => (a.score < b.score ? a : b));
+  const upcoming = interviews.filter(
+    (s) => s.status === "lobby" || s.status === "in_progress"
+  ).length;
+
+  const completedCount = interviews.filter((s) => s.status === "completed").length;
+
+  // Average score comes from real reports via analytics — not Math.random()
+  const avgScore =
+    analyticsData?.session_history
+      .filter((s) => s.overall_score !== null)
+      .reduce(
+        (sum, s, _, arr) => sum + (s.overall_score ?? 0) / arr.length,
+        0
+      ) ?? null;
+
+  // Competency scores from real backend — null means "no data yet"
+  const competencyScores = analyticsData?.competency_scores ?? null;
+
+  const strongest = competencyScores
+    ? competencyScores.reduce((a, b) => (a.score > b.score ? a : b))
+    : null;
+  const weakest = competencyScores
+    ? competencyScores.reduce((a, b) => (a.score < b.score ? a : b))
+    : null;
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-50/80">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       {/* Header */}
-      <header className="border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+      <header className="border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/90">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600 text-white">
               <User className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">
+              <h1 className="text-lg font-semibold text-foreground">
                 Welcome back, {profile?.fullName ?? user?.name ?? "Candidate"}
               </h1>
-              <p className="text-xs text-slate-500">{user?.email ?? "candidate@echosphere.dev"}</p>
+              <p className="text-xs text-muted-foreground">
+                {user?.email ?? "candidate@echosphere.dev"}
+              </p>
             </div>
           </div>
-          <Link
-            href="/dashboard/candidate/profile"
-            className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
-          >
-            <Edit2 className="h-4 w-4" />
-            Edit Profile
-          </Link>
+          <div className="flex items-center gap-3">
+            <LiveIndicator connected={liveConnected} />
+            <Link
+              href="/dashboard/candidate/profile"
+              className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit Profile
+            </Link>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-slate-400">
+        {pageLoading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Clock className="h-6 w-6 animate-spin mr-2" />
             Loading dashboard…
           </div>
         ) : (
           <>
-            {/* Quick actions row */}
+            {/* Backend error banners */}
+            {profileError && (
+              <ErrorBanner title="Profile Error" message={profileError} />
+            )}
+            {interviewsError && (
+              <ErrorBanner title="Interview History Error" message={interviewsError} />
+            )}
+
+            {/* Quick actions */}
             <div className="flex flex-wrap gap-3">
               <Link href="/interview/setup">
                 <Button variant="premium" size="lg" className="gap-2 shadow-lg shadow-violet-500/20">
@@ -168,10 +274,41 @@ export default function CandidateDashboardPage() {
               </Link>
             </div>
 
+            {/* Live stream stats (shown when connected) */}
+            {liveSnapshot && (
+              <Card className="border-emerald-500/20 bg-emerald-500/5">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex flex-wrap gap-6 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Active now </span>
+                      <span className="font-semibold text-emerald-600">
+                        {liveSnapshot.active_sessions}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Completed today </span>
+                      <span className="font-semibold text-foreground">
+                        {liveSnapshot.completed_sessions}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total sessions </span>
+                      <span className="font-semibold text-foreground">
+                        {liveSnapshot.total_sessions}
+                      </span>
+                    </div>
+                    <span className="ml-auto text-xs text-muted-foreground/60">
+                      updated {new Date(liveSnapshot.ts).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Stats grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                label="Upcoming Interviews"
+                label="Upcoming"
                 value={upcoming}
                 subtext="Sessions ready to start"
                 accent="sky"
@@ -186,13 +323,19 @@ export default function CandidateDashboardPage() {
               />
               <StatCard
                 label="Average Score"
-                value={avgScore > 0 ? `${avgScore}/100` : "—"}
-                subtext="Across all completed interviews"
+                value={
+                  avgScore !== null
+                    ? `${Math.round(avgScore)}/100`
+                    : completedCount > 0
+                    ? "Processing…"
+                    : "—"
+                }
+                subtext="Across completed interviews"
                 accent="violet"
                 icon={<TrendingUp className="h-5 w-5" />}
               />
               <StatCard
-                label="Profile Completion"
+                label="Profile"
                 value={`${completionPct}%`}
                 subtext={`${completed}/${completionFields.length} fields filled`}
                 accent="amber"
@@ -200,7 +343,7 @@ export default function CandidateDashboardPage() {
               />
             </div>
 
-            {/* Profile completion progress */}
+            {/* Profile completion */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -214,10 +357,12 @@ export default function CandidateDashboardPage() {
               <CardContent>
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-slate-700">
+                    <span className="text-sm font-medium text-foreground">
                       {completed} of {completionFields.length} sections filled
                     </span>
-                    <span className="text-sm font-mono text-slate-500">{completionPct}%</span>
+                    <span className="text-sm font-mono text-muted-foreground">
+                      {completionPct}%
+                    </span>
                   </div>
                   <Progress value={completionPct} className="h-2.5" />
                 </div>
@@ -251,29 +396,63 @@ export default function CandidateDashboardPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-center">
-                    <RadarChart data={competencyScores} size={240} />
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                        Strongest
-                      </Badge>
-                      <span className="font-medium text-slate-700">{strongest.label}</span>
-                      <span className="text-slate-500 font-mono">{strongest.score}/100</span>
+                  {analyticsLoading ? (
+                    <div className="flex items-center justify-center py-16 text-muted-foreground">
+                      <Clock className="h-5 w-5 animate-spin mr-2" />
+                      Loading analytics…
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Badge variant="secondary" className="bg-rose-100 text-rose-700 border-rose-200">
-                        Needs work
-                      </Badge>
-                      <span className="font-medium text-slate-700">{weakest.label}</span>
-                      <span className="text-slate-500 font-mono">{weakest.score}/100</span>
+                  ) : analyticsError ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm">
+                      <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium text-destructive">Analytics unavailable</p>
+                        <p className="text-muted-foreground mt-0.5">{analyticsError}</p>
+                        <p className="text-muted-foreground/70 mt-1 text-xs">
+                          Complete at least one interview for competency data.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : competencyScores ? (
+                    <>
+                      <div className="flex items-center justify-center">
+                        <RadarChart data={competencyScores} size={240} />
+                      </div>
+                      {strongest && weakest && (
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                              Strongest
+                            </Badge>
+                            <span className="font-medium text-foreground">{strongest.label}</span>
+                            <span className="text-muted-foreground font-mono">
+                              {strongest.score}/100
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant="secondary" className="bg-rose-100 text-rose-700 border-rose-200">
+                              Needs work
+                            </Badge>
+                            <span className="font-medium text-foreground">{weakest.label}</span>
+                            <span className="text-muted-foreground font-mono">
+                              {weakest.score}/100
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      <Award className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                      <p>No competency data yet.</p>
+                      <p className="text-xs mt-1 opacity-70">
+                        Start and complete an interview to see your scores.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Roadmap progress */}
+              {/* Roadmap */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -285,24 +464,39 @@ export default function CandidateDashboardPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <RoadmapProgress
-                    competencies={COMPETENCIES.map((name) => {
-                      const score = competencyScores.find((c) => c.label === name)?.score ?? 50;
-                      return {
-                        name,
-                        progress: score,
-                        color: score >= 70 ? "from-emerald-500 to-teal-500" : score >= 50 ? "from-violet-500 to-indigo-500" : "from-amber-500 to-orange-500",
-                      };
-                    })}
-                  />
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <Link
-                      href="/dashboard/candidate/roadmap"
-                      className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
-                    >
-                      View full roadmap <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </div>
+                  {competencyScores ? (
+                    <>
+                      <RoadmapProgress
+                        competencies={COMPETENCIES.map((name) => {
+                          const found = competencyScores.find((c) => c.label === name);
+                          const score = found?.score ?? 0;
+                          return {
+                            name,
+                            progress: score,
+                            color:
+                              score >= 70
+                                ? "from-emerald-500 to-teal-500"
+                                : score >= 50
+                                ? "from-violet-500 to-indigo-500"
+                                : "from-amber-500 to-orange-500",
+                          };
+                        })}
+                      />
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <Link
+                          href="/dashboard/candidate/roadmap"
+                          className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
+                        >
+                          View full roadmap <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      <Briefcase className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                      <p>Complete an interview to see your roadmap.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -314,13 +508,13 @@ export default function CandidateDashboardPage() {
                   <Calendar className="h-4 w-4 text-violet-600" />
                   Interview History
                 </CardTitle>
-                <CardDescription>
-                  Your recent mock interviews and assessments
-                </CardDescription>
+                <CardDescription>Your recent mock interviews and assessments</CardDescription>
               </CardHeader>
               <CardContent>
-                {interviews.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400">
+                {interviewsError ? (
+                  <ErrorBanner title="Could not load interviews" message={interviewsError} />
+                ) : interviews.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground">
                     <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No interviews yet. Start your first mock interview!</p>
                     <Link href="/interview/setup" className="mt-2 inline-block">
@@ -331,63 +525,94 @@ export default function CandidateDashboardPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {interviews.map((session) => (
-                      <InterviewCard
-                        key={session.id}
-                        title={session.setup?.company ?? "Interview"}
-                        subtitle={session.setup?.role ?? session.targetRole ?? "Mock Interview"}
-                        company={session.setup?.company ?? undefined}
-                        role={session.setup?.role ?? undefined}
-                        date={session.startedAt ? new Date(session.startedAt).toLocaleDateString() : undefined}
-                        status={session.status as "scheduled" | "completed" | "in_progress" | "abandoned"}
-                        score={session.status === "completed" ? Math.round(Math.random() * 30 + 65) : undefined}
-                        onAction={
-                          session.status === "completed"
-                            ? () => {}
-                            : session.status === "in_progress"
-                            ? () => {}
-                            : () => {}
-                        }
-                        actionLabel={
-                          session.status === "completed"
-                            ? "View Report"
-                            : session.status === "in_progress"
-                            ? "Resume"
-                            : "Details"
-                        }
-                      />
-                    ))}
+                    {interviews.map((session) => {
+                      // Use real score from analytics session_history — no Math.random()
+                      const realScore =
+                        analyticsData?.session_history.find(
+                          (h) => h.session_id === session.id
+                        )?.overall_score ?? undefined;
+
+                      return (
+                        <InterviewCard
+                          key={session.id}
+                          title={session.setup?.company || session.company || "Interview"}
+                          subtitle={
+                            session.setup?.role ||
+                            session.role ||
+                            session.targetRole ||
+                            "Mock Interview"
+                          }
+                          company={session.setup?.company || session.company || undefined}
+                          role={session.setup?.role || session.role || undefined}
+                          date={
+                            session.startedAt
+                              ? new Date(session.startedAt).toLocaleDateString()
+                              : undefined
+                          }
+                          status={
+                            session.status as
+                              | "scheduled"
+                              | "completed"
+                              | "in_progress"
+                              | "abandoned"
+                          }
+                          score={
+                            session.status === "completed" && realScore !== undefined
+                              ? Math.round(realScore)
+                              : undefined
+                          }
+                          onAction={() => {}}
+                          actionLabel={
+                            session.status === "completed"
+                              ? "View Report"
+                              : session.status === "in_progress"
+                              ? "Resume"
+                              : "Details"
+                          }
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Skills snapshot */}
+            {/* Skills snapshot — from real profile */}
             {profile && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <LinkIcon className="h-4 w-4 text-violet-600" />
-                    Skills & Links
+                    Skills &amp; Links
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <SkillsSection
-                    skills={[
-                      { name: "JavaScript", category: "programming" },
-                      { name: "React", category: "framework" },
-                      { name: "Node.js", category: "programming" },
-                      { name: "MongoDB", category: "database" },
-                    ]}
-                    category="Technical Skills"
-                  />
+                  {profile.skills && profile.skills.length > 0 ? (
+                    <SkillsSection
+                      skills={profile.skills.map((s: string) => ({
+                        name: s,
+                        category: "technical",
+                      }))}
+                      category="Technical Skills"
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No skills added yet.{" "}
+                      <Link
+                        href="/dashboard/candidate/profile"
+                        className="text-violet-600 hover:underline"
+                      >
+                        Add skills to your profile.
+                      </Link>
+                    </p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-4">
                     {profile.portfolioUrl && (
                       <a
                         href={profile.portfolioUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 transition-colors"
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"
                       >
                         <LinkIcon className="h-4 w-4" />
                         Portfolio
@@ -398,11 +623,8 @@ export default function CandidateDashboardPage() {
                         href={profile.githubUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 transition-colors"
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"
                       >
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.713 0 .267.18.577.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
-                        </svg>
                         GitHub
                       </a>
                     )}
@@ -411,11 +633,8 @@ export default function CandidateDashboardPage() {
                         href={profile.leetcodeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 transition-colors"
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"
                       >
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                        </svg>
                         LeetCode
                       </a>
                     )}

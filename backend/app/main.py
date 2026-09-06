@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.config import settings
 from app.database import init_db, close_db, get_db_context
-from app.api import auth, candidates, organizations, interviews, reports, sessions
+from app.api import auth, candidates, organizations, interviews, reports, sessions, analytics
 from app.mcp.whiteboard_server import serve as mcp_serve
 
 
@@ -125,13 +125,14 @@ app.add_middleware(
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 
-# ── Routers ──
-app.include_router(auth.router)
-app.include_router(candidates.router)
-app.include_router(organizations.router)
-app.include_router(interviews.router)
-app.include_router(reports.router)
-app.include_router(sessions.router)
+# ── Routers — all mounted under /api ──
+app.include_router(auth.router, prefix="/api")
+app.include_router(candidates.router, prefix="/api")
+app.include_router(organizations.router, prefix="/api")
+app.include_router(interviews.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
+app.include_router(sessions.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
 
 # ── Health check ──
 @app.get("/health", tags=["health"])

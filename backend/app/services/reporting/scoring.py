@@ -539,3 +539,16 @@ def create_scoring_engine(
 def create_default_scoring_engine() -> DeterministicScoringEngine:
     """Create a scoring engine with default weights."""
     return create_scoring_engine()
+
+
+def calculate_competency_dashboard(scores: list[dict]) -> dict:
+    """Calculate aggregate competency dashboard scores."""
+    if not scores:
+        return {"overall": 0, "breakdown": {}}
+    total = sum(s.get("score", 0) for s in scores)
+    avg = total / len(scores)
+    return {
+        "overall": round(avg, 1),
+        "breakdown": {s.get("competency", "unknown"): s.get("score", 0) for s in scores}
+    }
+

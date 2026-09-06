@@ -494,3 +494,6 @@ async def serve_mcp_whiteboard() -> None:
 
 async def run_mcp_whiteboard() -> None:
     await serve_mcp_whiteboard()
+
+
+serve = serve_mcp_whiteboard

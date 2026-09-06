@@ -1,7 +1,30 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans, Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ClerkProvider } from "@/components/providers/ClerkProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -22,14 +45,21 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
-        <ClerkProvider>
-          <TooltipProvider>
-            {children}
-          </TooltipProvider>
-        </ClerkProvider>
+    <html
+      lang="en"
+      className={`${plusJakartaSans.variable} ${outfit.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="font-sans antialiased bg-background text-foreground selection:bg-purple-500/30 selection:text-purple-200 min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <ClerkProvider>
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+          </ClerkProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
 }
+

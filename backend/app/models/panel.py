@@ -87,7 +87,7 @@ class Assessment(Base):
     # Relationships
     organization = relationship("Organization", back_populates="assessments")
     panel = relationship("Panel", back_populates="assessments")
-    batch_sessions = relationship("BatchSession", back_populates="assessment")
+    sessions = relationship("Session", back_populates="assessment")
     questions = relationship("OrganizationQuestion", back_populates="assessment")
 
 

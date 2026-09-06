@@ -89,7 +89,7 @@ class Session(Base):
     # Relationships
     panel = relationship("Panel", back_populates="sessions")
     candidate = relationship("User", back_populates="sessions_as_candidate")
-    assessment = relationship("Assessment", back_populates="batch_sessions")
+    assessment = relationship("Assessment", back_populates="sessions")
     batch = relationship("Batch", back_populates="sessions")
     whiteboard_state = relationship("WhiteboardState", back_populates="session", uselist=False, cascade="all, delete-orphan")
     transcript_turns = relationship("TranscriptTurn", back_populates="session", cascade="all, delete-orphan")
@@ -129,7 +129,7 @@ class Batch(Base):
 
     # Relationships
     organization = relationship("Organization", back_populates="batches")
-    panel = relationship("Panel", back_populates="sessions")
+    panel = relationship("Panel")
     sessions = relationship("Session", back_populates="batch")
     batch_sessions = relationship("BatchSession", back_populates="batch")
 
@@ -154,4 +154,4 @@ class BatchSession(Base):
 
     # Relationships
     batch = relationship("Batch", back_populates="batch_sessions")
-    session = relationship("Session", back_populates="assessment")
+    session = relationship("Session")

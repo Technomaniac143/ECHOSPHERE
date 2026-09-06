@@ -32,8 +32,8 @@ class GeminiClient:
     def __init__(self):
         self._api_key = settings.gemini_api_key
         self._client: httpx.AsyncClient | None = None
-        self._default_model = "gemini-2.0-flash"
-        self._vision_model = "gemini-2.0-flash-exp"  # For multimodal/vision tasks
+        self._default_model = "gemini-3.6-flash"
+        self._vision_model = "gemini-3.6-flash"  # For multimodal/vision tasks
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
@@ -46,7 +46,8 @@ class GeminiClient:
     
     def _build_url(self, endpoint: str) -> str:
         """Build a full API URL."""
-        return urljoin(self.BASE_URL, endpoint)
+        clean = endpoint.lstrip("/")
+        return f"{self.BASE_URL}/{clean}"
     
     async def generate_content(
         self,
@@ -101,7 +102,7 @@ class GeminiClient:
         if kwargs:
             request_body["generationConfig"].update(kwargs)
         
-        url = self._build_url(f"/models/{model}/generateContent")
+        url = self._build_url(f"models/{model}:generateContent")
         
         try:
             response = await client.post(
@@ -199,7 +200,7 @@ class GeminiClient:
             ],
         }]
         
-        url = self._build_url(f"/models/{model}/generateContent")
+        url = self._build_url(f"models/{model}:generateContent")
         
         try:
             response = await client.post(
@@ -255,3 +256,14 @@ def get_gemini_client() -> GeminiClient:
     if _gemini_client is None:
         _gemini_client = GeminiClient()
     return _gemini_client
+
+
+# ── Constants & Factory Aliases ──────────────────────────────────────────────
+
+GEMINI_FLASH_MODEL = "gemini-3.6-flash"
+GEMINI_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
+GEMINI_MULTIMODAL_MODEL = "gemini-3.6-flash"
+
+create_gemini_client = get_gemini_client
+create_flash_client = get_gemini_client
+create_multimodal_client = get_gemini_client

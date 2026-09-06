@@ -131,3 +131,12 @@ def get_contradiction_detector() -> ContradictionDetector:
     if _contradiction_detector is None:
         _contradiction_detector = ContradictionDetector()
     return _contradiction_detector
+
+
+# ── Aliases & Helper Wrappers ────────────────────────────────────────────────
+
+ContradictionDetectionService = ContradictionDetector
+ContradictionFlag = dict
+ContradictionDetectionUnavailable = ContradictionDetectionError
+ContradictionType = str
+create_contradiction_detection_service = get_contradiction_detector

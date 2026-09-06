@@ -5,6 +5,11 @@ import { useParams } from "next/navigation";
 import {
   RadarChart,
   BarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer,
 } from "recharts";
 import {
   Card,
@@ -58,6 +63,15 @@ const SAMPLE_REPORT: Report = {
   id: "rep-001",
   sessionId: "sess-001",
   overallScore: 78,
+  strengths: [
+    "Strong debugging ability and backend fundamentals",
+    "Clear, logical communication style",
+    "Good ownership and teamwork examples"
+  ],
+  weaknesses: [
+    "Could elaborate more on advanced topics under pressure",
+    "Needs more focus on connecting implementation choices to user impact"
+  ],
   competencyScores: [
     { competency: "Technical", score: 84, confidence: 0.86, strengths: ["Strong debugging ability", "Good backend fundamentals", "Clear technical explanations"], weaknesses: ["Could elaborate more on advanced topics"], evidence: [{ transcriptTurnId: "t1", timestamp: "08:42", text: "The candidate demonstrated understanding of caching and horizontal scaling." }] },
     { competency: "Problem Solving", score: 81, confidence: 0.78, strengths: ["Logical approach to challenges"], weaknesses: ["Could break down complex problems more systematically"], evidence: [{ transcriptTurnId: "t2", timestamp: "09:15", text: "Acknowledged the trade-offs in the proposed solution." }] },
@@ -97,8 +111,6 @@ const SAMPLE_REPORT: Report = {
       score: 72,
     },
   ],
-  strengths: ["Strong debugging ability", "Good backend fundamentals", "Clear technical explanations", "Good ownership examples"],
-  weaknesses: ["System design depth", "Customer impact reasoning", "Quantifying results"],
   recommendations: [
     "Practice system-design tradeoffs.",
     "Quantify project outcomes with metrics.",
@@ -200,7 +212,12 @@ export default function ReportPage() {
 
   if (!report) return null;
 
-  const radarData: CompetencyData[] = report.competencyScores.map((cs) => ({
+  const competencyScores = report.competencyScores || [];
+  const strengths = report.strengths || [];
+  const weaknesses = report.weaknesses || [];
+  const panelDisagreement = report.panelDisagreement || [];
+
+  const radarData: CompetencyData[] = competencyScores.map((cs) => ({
     competency: cs.competency,
     score: cs.score,
   }));
@@ -271,7 +288,7 @@ export default function ReportPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-500">
-              Confidence: {((report.competencyScores[0]?.confidence || 0) * 100).toFixed(0)}%
+              Confidence: {((competencyScores[0]?.confidence || 0) * 100).toFixed(0)}%
             </p>
           </motion.div>
 
@@ -287,7 +304,7 @@ export default function ReportPage() {
               <h3 className="text-base font-semibold text-white">Key Strengths</h3>
             </div>
             <ul className="space-y-2">
-              {report.strengths.map((s, i) => (
+              {strengths.map((s, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                   <span className="text-emerald-400 mt-0.5">✓</span>
                   <span>{s}</span>
@@ -308,7 +325,7 @@ export default function ReportPage() {
               <h3 className="text-base font-semibold text-white">Areas for Improvement</h3>
             </div>
             <ul className="space-y-2">
-              {report.weaknesses.map((w, i) => (
+              {weaknesses.map((w, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                   <span className="text-amber-400 mt-0.5">⚠</span>
                   <span>{w}</span>
@@ -336,16 +353,16 @@ export default function ReportPage() {
                   outerRadius={90}
                   innerRadius={50}
                 >
-                  <polarGrid stroke="#3f3f46" strokeDasharray="2 2" />
-                  <polarAngle axisTickness={2} axisLabel={{ fill: "#a1a1aa", fontSize: 11 }} />
-                  <polarRadius angle={30} domain={[0, 100]} tick={{ fill: "#a1a1aa", fontSize: 10 }} />
+                  <PolarGrid stroke="#3f3f46" strokeDasharray="2 2" />
+                  <PolarAngleAxis dataKey="competency" stroke="#a1a1aa" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#a1a1aa" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
                   <Radar
                     name="Score"
                     dataKey="score"
                     stroke="#3b82f6"
                     fill="#3b82f6"
                     fillOpacity={0.3}
-                    point={{ fill: "#3b82f6", r: 3 }}
+                    dot={{ fill: "#3b82f6", r: 3 }}
                   />
                 </RadarChart>
               </div>
@@ -362,8 +379,10 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {report.panelDisagreement.map((p) => {
-                  const color = COMPETENCY_COLORS[p.competency] || "#3b82f6";
+                {panelDisagreement.map((p) => {
+                  const compKey = p.competency || "Technical";
+                  const color = COMPETENCY_COLORS[compKey] || "#3b82f6";
+                  const label = p.personaLabel || p.persona;
                   return (
                     <div key={p.persona} className="space-y-1.5">
                       <div className="flex items-center justify-between text-sm">
@@ -372,9 +391,9 @@ export default function ReportPage() {
                             className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white"
                             style={{ backgroundColor: color }}
                           >
-                            {p.personaLabel.charAt(0)}
+                            {label.charAt(0)}
                           </div>
-                          <span className="text-zinc-300">{p.personaLabel}</span>
+                          <span className="text-zinc-300">{label}</span>
                         </div>
                         <span className="text-white font-medium">{p.score}</span>
                       </div>
@@ -397,7 +416,7 @@ export default function ReportPage() {
           <Tabs defaultValue="all" className="w-full">
             <TabsList className="mb-4 bg-white/5 border border-white/10">
               <TabsTrigger value="all" className="text-zinc-400 hover:text-white">
-                All Competencies ({report.competencyScores.length})
+                All Competencies ({competencyScores.length})
               </TabsTrigger>
               <TabsTrigger value="strengths" className="text-zinc-400 hover:text-white">
                 Strengths
@@ -408,7 +427,7 @@ export default function ReportPage() {
             </TabsList>
 
             <TabsContent value="all" className="space-y-4">
-              {report.competencyScores.map((cs, i) => {
+              {competencyScores.map((cs, i) => {
                 const color = COMPETENCY_COLORS[cs.competency] || "#3b82f6";
                 return (
                   <motion.div
@@ -451,9 +470,9 @@ export default function ReportPage() {
                     </div>
 
                     {/* Strengths/weaknesses */}
-                    {(cs.strengths.length > 0 || cs.weaknesses.length > 0) && (
+                    {((cs.strengths && cs.strengths.length > 0) || (cs.weaknesses && cs.weaknesses.length > 0)) && (
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {cs.strengths.length > 0 && (
+                        {cs.strengths && cs.strengths.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs text-emerald-400 font-medium">Strengths</p>
                             {cs.strengths.map((s, i) => (
@@ -463,7 +482,7 @@ export default function ReportPage() {
                             ))}
                           </div>
                         )}
-                        {cs.weaknesses.length > 0 && (
+                        {cs.weaknesses && cs.weaknesses.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs text-amber-400 font-medium">Weaknesses</p>
                             {cs.weaknesses.map((w, i) => (
@@ -494,7 +513,7 @@ export default function ReportPage() {
             </TabsContent>
 
             <TabsContent value="strengths" className="space-y-2">
-              {report.strengths.map((s, i) => (
+              {strengths.map((s, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-3">
                   <CheckCircle className="h-4 w-4 text-emerald-400" />
                   <span className="text-sm text-zinc-300">{s}</span>
@@ -503,7 +522,7 @@ export default function ReportPage() {
             </TabsContent>
 
             <TabsContent value="weaknesses" className="space-y-2">
-              {report.weaknesses.map((w, i) => (
+              {weaknesses.map((w, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
                   <AlertTriangle className="h-4 w-4 text-amber-400" />
                   <span className="text-sm text-zinc-300">{w}</span>
@@ -558,7 +577,9 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {report.panelDisagreement.map((p) => {
-                const color = COMPETENCY_COLORS[p.competency] || "#3b82f6";
+                const compKey = p.competency || "Technical";
+                const color = COMPETENCY_COLORS[compKey] || "#3b82f6";
+                const label = p.personaLabel || p.persona;
                 return (
                   <div key={p.persona} className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
                     <div className="flex items-start gap-3 mb-3">
@@ -566,11 +587,11 @@ export default function ReportPage() {
                         className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0"
                         style={{ backgroundColor: color }}
                       >
-                        {p.personaLabel.charAt(0)}
+                        {label.charAt(0)}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-white">{p.personaLabel}</p>
+                          <p className="text-sm font-medium text-white">{label}</p>
                           <span
                             className="text-sm font-bold"
                             style={{ color }}
@@ -581,9 +602,9 @@ export default function ReportPage() {
                         <p className="text-xs text-zinc-500 mt-0.5">{p.summary}</p>
                       </div>
                     </div>
-                    {(p.strengths.length > 0 || p.concerns.length > 0) && (
+                    {((p.strengths && p.strengths.length > 0) || (p.concerns && p.concerns.length > 0)) && (
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {p.strengths.length > 0 && (
+                        {p.strengths && p.strengths.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs text-emerald-400 font-medium">Strengths</p>
                             {p.strengths.map((s, i) => (
@@ -591,7 +612,7 @@ export default function ReportPage() {
                             ))}
                           </div>
                         )}
-                        {p.concerns.length > 0 && (
+                        {p.concerns && p.concerns.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs text-amber-400 font-medium">Concerns</p>
                             {p.concerns.map((c, i) => (
@@ -632,7 +653,7 @@ export default function ReportPage() {
           </CardHeader>
           <CardContent>
             <ol className="space-y-3">
-              {report.recommendations.map((r, i) => (
+              {(report.recommendations || []).map((r, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <div
                     className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-bold shrink-0"

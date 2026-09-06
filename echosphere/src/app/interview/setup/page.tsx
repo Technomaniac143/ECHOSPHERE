@@ -66,7 +66,7 @@ const EMPTY_SETUP: SetupState = {
   domain: "",
   customDomain: "",
   suggestedPersonas: [],
-  difficulty: "medium",
+  difficulty: "Medium",
   estimatedDuration: 20,
   focusAreas: [],
   mode: "practice",
@@ -92,8 +92,8 @@ export default function SetupPage() {
       const setup: InterviewSetup = res.data;
       setState((prev) => ({
         ...prev,
-        suggestedPersonas: setup.suggestedPersonas ?? [],
-        difficulty: (setup.difficulty as DifficultyLevel) ?? "medium",
+        suggestedPersonas: (setup.suggestedPersonas as PersonaKey[]) ?? [],
+        difficulty: (setup.difficulty as DifficultyLevel) ?? "Medium",
         estimatedDuration: setup.estimatedDuration ?? 20,
         focusAreas: setup.focusAreas ?? [],
       }));
@@ -101,8 +101,8 @@ export default function SetupPage() {
       toast.error("Could not generate setup proposal. Using defaults.");
       setState((prev) => ({
         ...prev,
-        suggestedPersonas: ["technical", "behavioral"],
-        difficulty: "medium",
+        suggestedPersonas: ["technical", "behavioral"] as PersonaKey[],
+        difficulty: "Medium",
         estimatedDuration: 20,
         focusAreas: ["Problem Solving", "Communication"],
       }));
@@ -184,6 +184,9 @@ export default function SetupPage() {
     hiring_manager: "bg-amber-500",
     behavioral: "bg-emerald-500",
     customer: "bg-pink-500",
+    domain: "bg-teal-500",
+    leadership: "bg-indigo-500",
+    culture: "bg-rose-500",
   };
 
   const personaLabel: Record<PersonaKey, string> = {
@@ -192,14 +195,16 @@ export default function SetupPage() {
     hiring_manager: "Hiring Manager",
     behavioral: "Behavioral Interviewer",
     customer: "Customer (Role-play)",
+    domain: "Domain Expert",
+    leadership: "Leadership",
+    culture: "Culture Fit",
   };
 
   const difficultyColor: Record<DifficultyLevel, string> = {
-    beginner: "text-sky-600 bg-sky-50 border-sky-200",
-    easy: "text-blue-600 bg-blue-50 border-blue-200",
-    medium: "text-amber-600 bg-amber-50 border-amber-200",
-    hard: "text-orange-600 bg-orange-50 border-orange-200",
-    expert: "text-rose-600 bg-rose-50 border-rose-200",
+    Easy: "text-blue-600 bg-blue-50 border-blue-200",
+    Medium: "text-amber-600 bg-amber-50 border-amber-200",
+    Hard: "text-orange-600 bg-orange-50 border-orange-200",
+    Expert: "text-rose-600 bg-rose-50 border-rose-200",
   };
 
   return (

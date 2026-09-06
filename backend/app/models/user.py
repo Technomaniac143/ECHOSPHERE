@@ -66,8 +66,7 @@ class User(Base):
 
     # Relationships
     sessions_as_candidate = relationship(
-        "Session", back_populates="candidate", foreign_keys="Session.candidate_id"
+        "Session", back_populates="candidate"
     )
-    reports = relationship("Report", back_populates="candidate")
     roadmaps = relationship("Roadmap", back_populates="student")
     organizations = relationship("Organization", back_populates="created_by_user")

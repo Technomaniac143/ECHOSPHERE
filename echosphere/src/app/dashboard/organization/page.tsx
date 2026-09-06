@@ -386,7 +386,7 @@ export default function OrganizationDashboardPage() {
                           dot: "bg-sky-500",
                           icon: <Calendar className="h-3.5 w-3.5" />,
                           },
-                          } as const satisfies Record<string, ActivityStatusConfig>;
+                        } as const;
                           const cfg =
                           statusConfig[activity.type as keyof typeof statusConfig] ??
                           statusConfig.interview_scheduled;
