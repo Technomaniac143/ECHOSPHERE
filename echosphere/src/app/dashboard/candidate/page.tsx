@@ -57,7 +57,16 @@ function ErrorBanner({ title, message }: { title: string; message: string }) {
 
 // ── Live status indicator ─────────────────────────────────────────────────────
 
-function LiveIndicator({ connected }: { connected: boolean }) {
+function LiveIndicator({ connected }: { connected: boolean | null }) {
+  // null = still checking (don't flash Offline on load)
+  if (connected === null) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-muted text-muted-foreground border border-border">
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-pulse" />
+        Connecting...
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${

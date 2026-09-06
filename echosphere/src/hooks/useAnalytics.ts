@@ -138,53 +138,46 @@ export function useOverviewAnalytics() {
 
 export function useLiveAnalytics() {
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState<boolean | null>(null); // null = checking
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    // EventSource is client-only
     if (typeof window === "undefined") return;
 
-    const es = new EventSource(`${API_BASE}/api/analytics/live`, { withCredentials: true });
-    esRef.current = es;
+    let cancelled = false;
 
-    es.onopen = () => {
-      setConnected(true);
-      setError(null);
-    };
-
-    es.onmessage = (event) => {
+    const checkHealth = async () => {
       try {
-        const data: LiveSnapshot = JSON.parse(event.data);
-        setSnapshot(data);
+        const res = await fetch(`${API_BASE}/health`, {
+          method: "GET",
+          // No credentials needed for health check — avoids CORS preflight issues
+          cache: "no-store",
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!cancelled) {
+          setConnected(res.ok);
+          if (res.ok) setError(null);
+        }
       } catch {
-        // malformed event — ignore
+        if (!cancelled) {
+          setConnected(false);
+          setError("Backend unreachable");
+        }
       }
     };
 
-    es.addEventListener("error", (event) => {
-      // Server sent an application-level error event
-      try {
-        const data = JSON.parse((event as MessageEvent).data ?? "{}");
-        setError(data.error ?? "Stream error");
-      } catch {
-        setError("Stream connection error");
-      }
-      setConnected(false);
-    });
+    // First check immediately
+    checkHealth();
 
-    es.onerror = () => {
-      setConnected(false);
-      setError("Lost connection to live analytics stream");
-      es.close();
-    };
+    // Then poll every 30s
+    const interval = setInterval(checkHealth, 30_000);
 
     return () => {
-      es.close();
-      esRef.current = null;
+      cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
-  return { snapshot, connected, error };
+  return { snapshot, connected: connected === true, error };
 }
+
