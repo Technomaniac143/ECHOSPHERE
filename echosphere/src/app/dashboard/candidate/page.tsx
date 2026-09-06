@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { candidateApi, interviewApi, ApiClientError } from "@/lib/api/client";
 import { useCandidateAnalytics, useLiveAnalytics } from "@/hooks/useAnalytics";
@@ -90,6 +91,7 @@ const COMPETENCIES = [
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function CandidateDashboardPage() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
@@ -133,13 +135,12 @@ export default function CandidateDashboardPage() {
     setInterviewsError(null);
     try {
       const res = await interviewApi.list({ limit: 10 });
-      setInterviews(res.data ?? []);
-    } catch (err) {
-      setInterviewsError(
-        err instanceof ApiClientError
-          ? `Could not load interviews: ${err.message}`
-          : "Unexpected error loading interviews"
-      );
+      const items = Array.isArray(res) ? res : (res?.data ?? []);
+      setInterviews(items);
+    } catch {
+      // If no interviews or error, leave blank without showing error
+      setInterviews([]);
+      setInterviewsError(null);
     }
   };
 
@@ -523,29 +524,49 @@ export default function CandidateDashboardPage() {
                 ) : (
                   <div className="space-y-3">
                     {interviews.map((session) => {
-                      // Use real score from analytics session_history — no Math.random()
+                      // Use real score from analytics session_history or session payload
                       const realScore =
                         analyticsData?.session_history.find(
                           (h) => h.session_id === session.id
-                        )?.overall_score ?? undefined;
+                        )?.overall_score ?? (session as any).overall_score ?? (session as any).overallScore ?? undefined;
+
+                      const sessionCompany =
+                        session.setup?.company ||
+                        session.company ||
+                        session.targetCompany ||
+                        (session as any).target_company ||
+                        "Mock Interview";
+
+                      const sessionRole =
+                        session.setup?.role ||
+                        session.role ||
+                        session.targetRole ||
+                        (session as any).target_role ||
+                        "General Interview";
+
+                      const rawDate =
+                        session.startedAt ||
+                        (session as any).started_at ||
+                        session.createdAt ||
+                        (session as any).created_at;
+
+                      const sessionDate = rawDate
+                        ? new Date(rawDate).toLocaleDateString()
+                        : undefined;
+
+                      const actionTarget =
+                        session.status === "completed"
+                          ? `/reports/${session.id}`
+                          : `/interview/setup?resume=${session.id}`;
 
                       return (
                         <InterviewCard
                           key={session.id}
-                          title={session.setup?.company || session.company || "Interview"}
-                          subtitle={
-                            session.setup?.role ||
-                            session.role ||
-                            session.targetRole ||
-                            "Mock Interview"
-                          }
-                          company={session.setup?.company || session.company || undefined}
-                          role={session.setup?.role || session.role || undefined}
-                          date={
-                            session.startedAt
-                              ? new Date(session.startedAt).toLocaleDateString()
-                              : undefined
-                          }
+                          title={sessionCompany}
+                          subtitle={sessionRole}
+                          company={sessionCompany !== "Mock Interview" ? sessionCompany : undefined}
+                          role={sessionRole !== "General Interview" ? sessionRole : undefined}
+                          date={sessionDate}
                           status={
                             session.status as
                               | "scheduled"
@@ -558,7 +579,7 @@ export default function CandidateDashboardPage() {
                               ? Math.round(realScore)
                               : undefined
                           }
-                          onAction={() => {}}
+                          onAction={() => router.push(actionTarget)}
                           actionLabel={
                             session.status === "completed"
                               ? "View Report"

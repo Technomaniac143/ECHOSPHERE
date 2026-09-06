@@ -151,7 +151,14 @@ class CandidateAnalyticsService:
         result = await self.db.execute(select(User).where(User.id == candidate_id))
         user = result.scalar_one_or_none()
         if not user:
-            raise ValueError(f"Candidate '{candidate_id}' not found.")
+            from datetime import datetime, timezone
+            return {
+                "candidate_id": candidate_id,
+                "total_sessions": 0,
+                "competency_scores": [],
+                "session_history": [],
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         # Fetch all completed sessions
         result = await self.db.execute(
@@ -163,10 +170,14 @@ class CandidateAnalyticsService:
         sessions = list(result.scalars().all())
 
         if not sessions:
-            raise ValueError(
-                f"Candidate '{candidate_id}' has no completed interviews yet. "
-                "Complete at least one interview to see analytics."
-            )
+            from datetime import datetime, timezone
+            return {
+                "candidate_id": candidate_id,
+                "total_sessions": 0,
+                "competency_scores": [],
+                "session_history": [],
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         from app.models.report import Report as ReportModel
 
@@ -197,10 +208,14 @@ class CandidateAnalyticsService:
             })
 
         if not competency_accumulator:
-            raise ValueError(
-                "Reports exist but contain no competency scores. "
-                "This indicates reports were not fully generated."
-            )
+            from datetime import datetime, timezone
+            return {
+                "candidate_id": candidate_id,
+                "total_sessions": len(sessions),
+                "competency_scores": [],
+                "session_history": per_session,
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         # Average each competency across sessions
         averaged: List[Dict[str, Any]] = [

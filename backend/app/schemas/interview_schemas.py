@@ -183,8 +183,18 @@ class InterviewHistoryResponse(BaseModel):
     status: str
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     overall_score: Optional[float] = None
+    company: Optional[str] = None
+    role: Optional[str] = None
+    targetRole: Optional[str] = None
+    targetCompany: Optional[str] = None
+    targetDomain: Optional[str] = None
+    startedAt: Optional[str] = None
+    endedAt: Optional[str] = None
+    createdAt: Optional[str] = None
+
+    model_config = {"extra": "allow"}
 
 
 class InterviewDetailResponse(BaseModel):
@@ -198,7 +208,11 @@ class InterviewDetailResponse(BaseModel):
     personas: list[str] = []
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     overall_score: Optional[float] = None
     report_id: Optional[str] = None
+    whiteboard_state: Optional[dict] = None
+    transcript: list = []
+
+    model_config = {"extra": "allow"}
 

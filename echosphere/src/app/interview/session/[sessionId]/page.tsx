@@ -143,7 +143,13 @@ export default function SessionPage() {
         const role = sessionRes?.data?.targetRole || sessionRes?.data?.role || sessionRes?.target_role;
         if (role) setTargetRole(role);
 
-        // Anam owns the microphone. Do not initialize Agora RTC here — it would steal the mic.
+        // Anam owns the microphone — request permission before streaming starts.
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (micErr) {
+          console.warn("Mic permission denied or unavailable:", micErr);
+        }
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/sessions/${sessionId}/anam-token`, {
           method: "POST",
         });
@@ -184,18 +190,30 @@ export default function SessionPage() {
               anamClient.addListener(AnamEvent.USER_SPEECH_ENDED, () => {
                 markSpeaking("candidate", false);
               });
+
+              // Log connection errors from the SDK
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (anamClient as any).addListener?.("CONNECTION_CLOSED", (reason: unknown) => {
+                console.warn("Anam CONNECTION_CLOSED:", reason);
+              });
             } catch (err) {
               console.warn("Anam event listener setup notice:", err);
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 400));
+            // Wait for DOM paint so the video element is fully available
+            await new Promise((resolve) => setTimeout(resolve, 800));
             const videoEl = document.getElementById("anam-video-element") as HTMLVideoElement | null;
             if (videoEl) {
               videoEl.muted = true;
               videoEl.playsInline = true;
               videoEl.autoplay = true;
             }
-            await anamClient.streamToVideoElement("anam-video-element");
+            try {
+              await anamClient.streamToVideoElement("anam-video-element");
+            } catch (streamErr: any) {
+              console.error("Anam streamToVideoElement error:", streamErr?.message || streamErr);
+              throw streamErr;
+            }
             if (videoEl) {
               try {
                 await videoEl.play();

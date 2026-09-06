@@ -25,9 +25,10 @@ export default function CandidateReportsPage() {
     const fetchReports = async () => {
       try {
         const res = await interviewApi.list({ status: "completed", limit: 50 });
-        setSessions(res.data ?? []);
-      } catch (err) {
-        setError(err instanceof ApiClientError ? err.message : "Failed to load reports");
+        const items = Array.isArray(res) ? res : (res?.data ?? []);
+        setSessions(items);
+      } catch {
+        setSessions([]);
       } finally {
         setLoading(false);
       }

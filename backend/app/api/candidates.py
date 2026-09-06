@@ -1,7 +1,7 @@
 """Candidate management routes — profile, resume, skills, setup parsing."""
-from typing import Annotated, Optional
+from typing import Annotated, Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -299,8 +299,8 @@ async def parse_setup(
 
 @router.post("/system-check")
 async def record_system_check(
-    data: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
+    data: Dict[str, Any] = Body(...),
 ) -> dict:
     """Record candidate system check status (camera, microphone, screen_share, network)."""
     import json
@@ -342,7 +342,7 @@ async def record_system_check(
 async def submit_sample_video(
     file: Optional[UploadFile] = None,
     duration: Optional[float] = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> dict:
     """Submit candidate sample video test (10-30s)."""
     import json

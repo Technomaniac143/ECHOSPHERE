@@ -130,15 +130,29 @@ export const candidateApi = {
 };
 
 export const interviewApi = {
-  list: (params?: { status?: string; limit?: number; offset?: number }) => {
+  list: async (params?: { status?: string; limit?: number; offset?: number; candidate_id?: string }) => {
     const search = new URLSearchParams();
     if (params?.status) search.set("status", params.status);
     if (params?.limit) search.set("limit", String(params.limit));
     if (params?.offset) search.set("offset", String(params.offset));
+    if (params?.candidate_id) search.set("candidate_id", params.candidate_id);
     const qs = search.toString();
-    return api.get<{ data: import("@/types").Session[]; total?: number }>(
-      `/api/interviews${qs ? `?${qs}` : ""}`,
-    );
+    try {
+      const res = await api.get<any>(`/api/interviews${qs ? `?${qs}` : ""}`);
+      if (Array.isArray(res)) {
+        return { data: res as import("@/types").Session[], total: res.length };
+      }
+      if (res && Array.isArray(res.data)) {
+        return res as { data: import("@/types").Session[]; total?: number };
+      }
+      if (res && Array.isArray(res.interviews)) {
+        return { data: res.interviews as import("@/types").Session[], total: res.total ?? res.interviews.length };
+      }
+      return { data: [] as import("@/types").Session[], total: 0 };
+    } catch (err) {
+      console.warn("Could not load interviews:", err);
+      return { data: [] as import("@/types").Session[], total: 0 };
+    }
   },
   get: (id: string) => api.get<{ data: import("@/types").Session }>(`/api/interviews/${id}`),
   reports: (sessionId: string) => api.get<{ data: import("@/types").Report }>(`/api/reports/${sessionId}`),

@@ -201,8 +201,11 @@ class InterviewManager:
 
     async def get_session(self, session_id: str) -> Session:
         """Get a session by ID."""
+        from sqlalchemy.orm import selectinload
         result = await self.db.execute(
-            select(Session).where(Session.id == session_id)
+            select(Session)
+            .options(selectinload(Session.report))
+            .where(Session.id == session_id)
         )
         session = result.scalar_one_or_none()
         if not session:
@@ -287,16 +290,27 @@ class InterviewManager:
         self,
         candidate_id: str | None = None,
         status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[Session]:
         """List interviews, optionally filtered."""
-        query = select(Session)
+        from sqlalchemy.orm import selectinload
+        query = select(Session).options(selectinload(Session.report))
 
         if candidate_id:
             query = query.where(Session.candidate_id == candidate_id)
         if status:
-            query = query.where(Session.status == SessionStatus(status))
+            try:
+                query = query.where(Session.status == SessionStatus(status))
+            except (ValueError, KeyError):
+                query = query.where(Session.status == status)
 
         query = query.order_by(Session.created_at.desc())
+        if limit is not None and limit > 0:
+            query = query.limit(limit)
+        if offset is not None and offset > 0:
+            query = query.offset(offset)
+
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
