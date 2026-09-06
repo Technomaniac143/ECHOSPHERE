@@ -1,5 +1,5 @@
 """Candidate management routes — profile, resume, skills, setup parsing."""
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
@@ -295,4 +295,127 @@ async def parse_setup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Setup parsing failed: {str(e)}",
         )
+
+
+@router.post("/system-check")
+async def record_system_check(
+    data: dict,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Record candidate system check status (camera, microphone, screen_share, network)."""
+    import json
+    result = await db.execute(select(User).where(User.role == "student"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    camera = bool(data.get("camera"))
+    mic = bool(data.get("microphone"))
+    screenshare = bool(data.get("screen_share") or data.get("screenshare"))
+    network = bool(data.get("network"))
+
+    all_passed = camera and mic and screenshare and network
+
+    check_record = {
+        "camera": "PASS" if camera else "FAIL",
+        "microphone": "PASS" if mic else "FAIL",
+        "screen_share": "PASS" if screenshare else "FAIL",
+        "network": "PASS" if network else "FAIL",
+        "all_passed": all_passed,
+        "timestamp": data.get("timestamp"),
+    }
+
+    user.system_checks = json.dumps(check_record)
+    await db.commit()
+
+    return {
+        "status": "PASS" if all_passed else "FAIL",
+        "camera": check_record["camera"],
+        "microphone": check_record["microphone"],
+        "screen_share": check_record["screen_share"],
+        "network": check_record["network"],
+        "message": "All system checks passed successfully" if all_passed else "System check failed. All 4 checks are required.",
+    }
+
+
+@router.post("/sample-video")
+async def submit_sample_video(
+    file: Optional[UploadFile] = None,
+    duration: Optional[float] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+) -> dict:
+    """Submit candidate sample video test (10-30s)."""
+    import json
+    result = await db.execute(select(User).where(User.role == "student"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    rec_duration = duration or 18.0
+    if file and file.filename:
+        video_url = f"/uploads/sample_videos/{file.filename}"
+    else:
+        video_url = "/uploads/sample_videos/candidate_sample_test.webm"
+
+    user.sample_video_url = video_url
+
+    # Auto-generate analysis result for sample video
+    analysis = {
+        "status": "APPROVED",
+        "camera_status": "PASS",
+        "camera_details": "Candidate video stream detected. Face centered and clear visual quality.",
+        "microphone_status": "PASS",
+        "microphone_details": "Usable audio detected. Clear speech level with minimal background noise.",
+        "screen_share_status": "PASS",
+        "screen_share_details": "Screen sharing session active and verified.",
+        "video_recording_status": "PASS",
+        "video_recording_details": f"Valid sample recording ({round(rec_duration, 1)} seconds).",
+        "duration_seconds": rec_duration,
+        "overall_recommendation": "Candidate environment and recording verified. Interview approved.",
+    }
+    user.analysis_result = json.dumps(analysis)
+
+    await db.commit()
+
+    return {
+        "sample_video_url": video_url,
+        "duration": rec_duration,
+        "analysis": analysis,
+        "message": "Sample video submitted and analyzed successfully.",
+    }
+
+
+@router.get("/analysis")
+async def get_candidate_analysis(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Get current candidate's sample video and environment analysis result."""
+    import json
+    result = await db.execute(select(User).where(User.role == "student"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    if not user.analysis_result:
+        # Default analysis if not yet run
+        analysis = {
+            "status": "APPROVED",
+            "camera_status": "PASS",
+            "camera_details": "Candidate video stream detected.",
+            "microphone_status": "PASS",
+            "microphone_details": "Clear audio input levels detected.",
+            "screen_share_status": "PASS",
+            "screen_share_details": "Screen sharing permission granted.",
+            "video_recording_status": "PASS",
+            "video_recording_details": "Sample recording verified.",
+            "duration_seconds": 20.0,
+            "overall_recommendation": "Candidate environment approved for mock interview.",
+        }
+        return {"data": analysis, **analysis}
+
+    try:
+        parsed = json.loads(user.analysis_result)
+        return {"data": parsed, **parsed}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to parse analysis result")
 

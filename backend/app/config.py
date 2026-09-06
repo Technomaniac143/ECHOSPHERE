@@ -2,18 +2,29 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import pydantic
 import pydantic_settings  # type: ignore[import-untyped]
+from dotenv import load_dotenv
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env into os.environ; override=True so rotated keys take effect on restart
+load_dotenv(BACKEND_DIR / ".env", override=True)
+load_dotenv(".env", override=True)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(BACKEND_DIR / ".env"),
+            ".env",
+        ),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -31,6 +42,11 @@ class Settings(BaseSettings):
     agora_convoai_api_key: str = ""
 
     gemini_api_key: str = ""
+    
+    anam_api_key: str = ""
+    anam_avatar_id: str = ""
+    anam_voice_id: str = "6bfbe25a-979d-40f3-a92b-5394170af54b"
+    anam_llm_id: str = "ANAM_GPT_4O_MINI_V1"
 
     clerk_secret_key: str = ""
     clerk_publishable_key: str = ""

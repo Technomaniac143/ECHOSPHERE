@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.session import Session
 from app.models.user import User
@@ -28,6 +29,31 @@ from app.services.interview.manager import InterviewManager, InterviewNotFoundEr
 from app.services.auth import AuthService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _interviewer_system_prompt(*, role: str, company: str | None, domain: str | None) -> str:
+    company_bit = f" at {company}" if company else ""
+    domain_bit = f" Domain focus: {domain}." if domain else ""
+    return (
+        f"You are EchoSphere, a senior hiring interviewer conducting a live spoken interview "
+        f"for {role}{company_bit}.{domain_bit} "
+        "You are an interviewer, never a tutor, teacher, coach, or coding assistant. "
+        "Never explain concepts, lecture, give answers, walk through tutorials, or teach the basics. "
+        "Ask exactly one short question, then stop and wait for the candidate to speak. "
+        "After they answer, ask a brief follow-up that probes depth, tradeoffs, or a real example. "
+        "Spoken replies must be one to three sentences. No markdown, lists, or code. "
+        "If they are vague, ask for a specific example. If they contradict themselves, ask them to reconcile it. "
+        "Stay professional and evaluative; do not praise excessively."
+    )
+
+
+def _interviewer_opening(*, role: str, company: str | None) -> str:
+    company_bit = f" at {company}" if company else ""
+    return (
+        f"Hello. I am an AI interviewer from EchoSphere. This session is recorded and evaluated "
+        f"for the {role}{company_bit} role. Let's begin. "
+        "Tell me about a recent technical problem you owned end to end, including the tradeoffs you made."
+    )
 
 
 def get_current_user_from_db(
@@ -173,6 +199,81 @@ async def start_session_by_path(
     return await start_session(request, db)
 
 
+@router.get("/active", response_model=list[SessionCreateResponse])
+async def list_active_sessions(
+    candidate_id: Annotated[str | None, Query()] = None,
+    org_id: Annotated[str | None, Query()] = None,
+    mode: Annotated[str | None, Query()] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+) -> list[Session]:
+    """List active (in_progress) sessions, optionally filtered."""
+    interview_mgr = InterviewManager(db)
+    sessions = await interview_mgr.list_active_sessions(
+        candidate_id=candidate_id,
+        org_id=org_id,
+        mode=mode,
+    )
+    return sessions
+
+
+@router.get("/all", response_model=list[SessionCreateResponse])
+async def list_all_sessions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[Session]:
+    """List sessions with pagination (for admin/dashboard)."""
+    result = await db.execute(
+        select(Session)
+        .order_by(Session.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    sessions = result.scalars().all()
+    return list(sessions)
+
+
+@router.get("/stats", response_model=dict)
+async def get_session_stats(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Get session statistics."""
+    from sqlalchemy import func
+
+    total = await db.execute(select(func.count(Session.id)))
+    active = await db.execute(
+        select(func.count(Session.id)).where(Session.status == "in_progress")
+    )
+    completed = await db.execute(
+        select(func.count(Session.id)).where(Session.status == "completed")
+    )
+    abandoned = await db.execute(
+        select(func.count(Session.id)).where(Session.status == "abandoned")
+    )
+
+    return {
+        "total": total.scalar(),
+        "active": active.scalar(),
+        "completed": completed.scalar(),
+        "abandoned": abandoned.scalar(),
+    }
+
+
+@router.get("/batches/{batch_id}", response_model=list[SessionCreateResponse])
+async def list_batch_sessions(
+    batch_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[Session]:
+    """List all sessions in a batch."""
+    from app.models.batch import Batch
+
+    result = await db.execute(
+        select(Session).where(Session.batch_id == batch_id)
+    )
+    sessions = result.scalars().all()
+    return list(sessions)
+
+
 @router.get("/{session_id}")
 async def get_session_by_id(
     session_id: str,
@@ -213,88 +314,6 @@ async def get_session_by_id(
     }
 
 
-
-@router.get("/active", response_model=list[SessionCreateResponse])
-async def list_active_sessions(
-    candidate_id: Annotated[str | None, Query()] = None,
-    org_id: Annotated[str | None, Query()] = None,
-    mode: Annotated[str | None, Query()] = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
-) -> list[Session]:
-    """List active (in_progress) sessions, optionally filtered."""
-    interview_mgr = InterviewManager(db)
-    
-    sessions = await interview_mgr.list_active_sessions(
-        candidate_id=candidate_id,
-        org_id=org_id,
-        mode=mode,
-    )
-    return sessions
-
-
-@router.get("/batches/{batch_id}", response_model=list[SessionCreateResponse])
-async def list_batch_sessions(
-    batch_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[Session]:
-    """List all sessions in a batch."""
-    from app.models.batch import Batch
-    
-    result = await db.execute(
-        select(Session)
-        .join(Batch, Session.id == Batch.id)  # This needs proper relationship
-        .where(Batch.id == batch_id)
-    )
-    sessions = result.scalars().all()
-    return list(sessions)
-
-
-@router.get("/all", response_model=list[SessionCreateResponse])
-async def list_all_sessions(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[Session]:
-    """List sessions with pagination (for admin/dashboard)."""
-    from app.models.batch import Batch
-    
-    result = await db.execute(
-        select(Session)
-        .options()
-        .order_by(Session.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    sessions = result.scalars().all()
-    return list(sessions)
-
-
-@router.get("/stats", response_model=dict)
-async def get_session_stats(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Get session statistics."""
-    from sqlalchemy import func
-    
-    total = await db.execute(select(func.count(Session.id)))
-    active = await db.execute(
-        select(func.count(Session.id)).where(Session.status == "in_progress")
-    )
-    completed = await db.execute(
-        select(func.count(Session.id)).where(Session.status == "completed")
-    )
-    abandoned = await db.execute(
-        select(func.count(Session.id)).where(Session.status == "abandoned")
-    )
-    
-    return {
-        "total": total.scalar(),
-        "active": active.scalar(),
-        "completed": completed.scalar(),
-        "abandoned": abandoned.scalar(),
-    }
-
-
 # WebSocket for real-time session state
 @router.websocket("/ws/{session_id}")
 async def session_websocket(
@@ -318,10 +337,8 @@ async def session_websocket(
         # Send initial state
         initial_state = InterviewStateUpdate(
             session_id=session_id,
-            status=session.status,
-            current_persona=session.current_persona,
-            remaining_time=session.get_remaining_time() if session else 0,
-            whiteboard_state={},  # Will be populated from whiteboard service
+            status=session.status.value if hasattr(session.status, "value") else str(session.status),
+            current_persona=None,
         )
         await websocket.send_json(initial_state.model_dump())
         
@@ -379,22 +396,15 @@ async def end_session(
         )
 
 
-@router.get("/{session_id}", response_model=SessionCreateResponse)
-async def get_session(
+@router.post("/{session_id}/end", response_model=SessionUpdate)
+async def end_session_by_path(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    reason: Annotated[str | None, Query()] = None,
 ) -> Session:
-    """Get session details by ID."""
-    interview_mgr = InterviewManager(db)
-    
-    try:
-        session = await interview_mgr.get_session(session_id)
-        return session
-    except InterviewNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found",
-        )
+    """End an interview session by path session_id."""
+    request = SessionEndRequest(session_id=session_id, reason=reason or "completed")
+    return await end_session(request, db)
 
 
 @router.get("/{session_id}/state", response_model=SessionStateResponse)
@@ -403,17 +413,21 @@ async def get_session_state(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionStateResponse:
     """Get current whiteboard state for a session."""
-    from app.services.interview.manager import InterviewManager
-    
+    from datetime import datetime, timezone
+
     interview_mgr = InterviewManager(db)
-    
+
     try:
+        session = await interview_mgr.get_session(session_id)
         state = await interview_mgr.get_session_state(session_id)
+        status_value = session.status.value if hasattr(session.status, "value") else str(session.status)
         return SessionStateResponse(
             session_id=session_id,
-            whiteboard_state=state,
-            current_persona=state.get("current_persona"),
-            difficulty_state=state.get("difficulty_state", {}),
+            status=status_value,
+            whiteboard_state=state if isinstance(state, dict) else {},
+            current_persona=(state or {}).get("current_persona") if isinstance(state, dict) else None,
+            remaining_time_seconds=session.get_remaining_time(),
+            last_update=datetime.now(timezone.utc),
         )
     except InterviewNotFoundError:
         raise HTTPException(
@@ -425,3 +439,97 @@ async def get_session_state(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+
+
+@router.get("/{session_id}/whiteboard")
+async def get_session_whiteboard(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Whiteboard payload in the shape the frontend poller expects."""
+    state = await get_session_state(session_id, db)
+    wb = state.whiteboard_state or {}
+    return {
+        "data": {
+            **wb,
+            "currentPersona": wb.get("currentPersona") or wb.get("current_persona") or "technical",
+            "difficultyState": wb.get("difficultyState") or wb.get("difficulty_state") or {},
+            "openThreads": wb.get("openThreads") or wb.get("open_threads") or [],
+            "strengths": wb.get("strengths") or [],
+            "weaknesses": wb.get("weaknesses") or [],
+        }
+    }
+
+
+@router.post("/{session_id}/anam-token")
+async def get_anam_session_token(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Generate a short-lived Anam session token."""
+    import os
+    import httpx
+
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    role = (session.target_role if session else None) or "Software Engineer"
+    company = session.target_company if session else None
+    domain = session.target_domain if session else None
+    duration_minutes = (session.interview_duration_minutes if session else None) or 20
+
+    anam_api_key = (settings.anam_api_key or os.getenv("ANAM_API_KEY") or "").strip()
+    anam_avatar_id = (settings.anam_avatar_id or os.getenv("ANAM_AVATAR_ID") or "").strip()
+    anam_voice_id = (settings.anam_voice_id or os.getenv("ANAM_VOICE_ID") or "6bfbe25a-979d-40f3-a92b-5394170af54b").strip()
+    anam_llm_id = (settings.anam_llm_id or os.getenv("ANAM_LLM_ID") or "ANAM_GPT_4O_MINI_V1").strip()
+
+    if not anam_api_key or not anam_avatar_id:
+        raise HTTPException(status_code=500, detail="Anam API credentials not configured.")
+
+    persona_config = {
+        "name": "EchoSphere AI",
+        "avatarId": anam_avatar_id,
+        "voiceId": anam_voice_id,
+        "llmId": anam_llm_id,
+        "systemPrompt": _interviewer_system_prompt(role=role, company=company, domain=domain),
+        "initialMessage": _interviewer_opening(role=role, company=company),
+    }
+
+    headers = {
+        "Authorization": f"Bearer {anam_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "https://api.anam.ai/v1/auth/session-token",
+                headers=headers,
+                json={"personaConfig": persona_config},
+                timeout=15.0,
+            )
+            if response.status_code >= 400:
+                # Retry with the same payload shape that is known to authenticate.
+                response = await client.post(
+                    "https://api.anam.ai/v1/auth/session-token",
+                    headers=headers,
+                    json={
+                        "personaConfig": {
+                            "name": "EchoSphere AI",
+                            "avatarId": anam_avatar_id,
+                            "voiceId": anam_voice_id,
+                            "llmId": anam_llm_id,
+                            "systemPrompt": persona_config["systemPrompt"],
+                        }
+                    },
+                    timeout=15.0,
+                )
+            response.raise_for_status()
+            data = response.json()
+            return data
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"Failed to get Anam token: {e.response.text}")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Anam API request timed out.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get Anam token: {str(e)}")
+

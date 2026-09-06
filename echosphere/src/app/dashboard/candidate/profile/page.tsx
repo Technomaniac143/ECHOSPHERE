@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { candidateApi } from "@/lib/api/client";
 import type { CandidateProfile, SkillTag, Certificate } from "@/types";
 import {
@@ -17,7 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Phone, MapPin, Briefcase, Building2, Code, Link as LinkIcon, FileCode, Layers, Award, Upload, Plus, Trash2, Check, Loader2, Edit2, ChevronRight } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  User, Mail, Phone, MapPin, Briefcase, Building2, Code, Link as LinkIcon,
+  FileCode, Layers, Award, Upload, Plus, Trash2, Check, Loader2, ArrowLeft,
+  Camera, Save, RefreshCw
+} from "lucide-react";
 
 const EXPERIENCE_LEVELS = [
   "Fresher",
@@ -46,7 +53,31 @@ const CATEGORY_KEYS: Record<string, "programming" | "framework" | "database" | "
 };
 
 export default function CandidateProfilePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
+
+  // Controlled form state for seamless, non-glitchy keyboard editing
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    location: "",
+    targetCompany: "",
+    targetRole: "",
+    targetDomain: "",
+    experienceLevel: "",
+    portfolioUrl: "",
+    githubUrl: "",
+    leetcodeUrl: "",
+    university: "",
+    degree: "",
+    department: "",
+    graduationYear: "",
+    cgpa: "",
+    relevantCoursework: "",
+    avatarUrl: "",
+  });
+
   const [skills, setSkills] = useState<SkillTag[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,22 +93,40 @@ export default function CandidateProfilePage() {
         candidateApi.profile(),
         candidateApi.certificates?.(new FormData()) ?? Promise.resolve({ data: [] }),
       ]);
-      setProfile(profRes.data);
-      setSkills(
-        ((profRes.data as any).skills as unknown as SkillTag[]) ??
-        [
-          { name: "JavaScript", category: "programming" },
-          { name: "React", category: "framework" },
-          { name: "Node.js", category: "programming" },
-        ],
-      );
+      const prof = profRes.data;
+      setProfile(prof);
+      if (prof) {
+        setFormData({
+          fullName: prof.fullName ?? "",
+          email: prof.email ?? "",
+          phone: prof.phone ?? "",
+          location: prof.location ?? "",
+          targetCompany: prof.targetCompany ?? "",
+          targetRole: prof.targetRole ?? "",
+          targetDomain: prof.targetDomain ?? "",
+          experienceLevel: prof.experienceLevel ?? "",
+          portfolioUrl: prof.portfolioUrl ?? "",
+          githubUrl: prof.githubUrl ?? "",
+          leetcodeUrl: prof.leetcodeUrl ?? "",
+          university: prof.university ?? "",
+          degree: prof.degree ?? "",
+          department: prof.department ?? "",
+          graduationYear: prof.graduationYear ? String(prof.graduationYear) : "",
+          cgpa: prof.cgpa ? String(prof.cgpa) : "",
+          relevantCoursework: prof.relevantCoursework ?? "",
+          avatarUrl: (prof as any).avatarUrl ?? (prof as any).avatar_url ?? "",
+        });
+        setSkills(
+          ((prof as any).skills as unknown as SkillTag[]) ?? [
+            { name: "JavaScript", category: "programming" },
+            { name: "React", category: "framework" },
+            { name: "Node.js", category: "programming" },
+          ]
+        );
+      }
       setCertificates((certRes as unknown as { data?: Certificate[] }).data ?? []);
-    } catch {
-      setProfile(null);
-      setSkills([
-        { name: "JavaScript", category: "programming" },
-        { name: "React", category: "framework" },
-      ]);
+    } catch (err) {
+      console.error("Failed to load profile:", err);
     } finally {
       setLoading(false);
     }
@@ -87,16 +136,55 @@ export default function CandidateProfilePage() {
     fetchProfile();
   }, [fetchProfile]);
 
-  const handleSave = async (fields: Partial<CandidateProfile>) => {
+  const handleInputChange = (field: keyof typeof formData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const res = await candidateApi.updateProfile(fields);
+      const payload: Partial<CandidateProfile> = {
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        location: formData.location,
+        targetCompany: formData.targetCompany,
+        targetRole: formData.targetRole,
+        targetDomain: formData.targetDomain,
+        experienceLevel: formData.experienceLevel,
+        portfolioUrl: formData.portfolioUrl,
+        githubUrl: formData.githubUrl,
+        leetcodeUrl: formData.leetcodeUrl,
+        university: formData.university,
+        degree: formData.degree,
+        department: formData.department,
+        graduationYear: formData.graduationYear ? parseInt(formData.graduationYear) : null,
+        cgpa: formData.cgpa ? parseFloat(formData.cgpa) : null,
+        relevantCoursework: formData.relevantCoursework,
+        skills: skills,
+      };
+
+      const res = await candidateApi.updateProfile(payload);
       setProfile(res.data);
+      toast.success("Profile saved successfully");
     } catch (err) {
       console.error("Failed to save profile:", err);
+      toast.error("Failed to save profile changes.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setFormData((prev) => ({ ...prev, avatarUrl: result }));
+      toast.success("Profile photo updated");
+    };
+    reader.readAsDataURL(file);
   };
 
   const addSkill = () => {
@@ -123,9 +211,11 @@ export default function CandidateProfilePage() {
           ...prev,
           (res as unknown as { data: Certificate }).data,
         ]);
+        toast.success("Certificate uploaded");
       }
     } catch (err) {
       console.error("Certificate upload failed:", err);
+      toast.error("Failed to upload certificate");
     } finally {
       setSavingCert(null);
     }
@@ -147,33 +237,106 @@ export default function CandidateProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50/80">
-      {/* Header */}
+      {/* Header with clearly visible Back button */}
       <header className="border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/80 sticky top-0 z-40">
         <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600 text-white">
-              <User className="h-5 w-5" />
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-slate-700 hover:text-slate-900 border-slate-300"
+              onClick={() => router.push("/dashboard/candidate")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+            <div className="h-4 w-px bg-slate-200" />
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">Profile</h1>
-              <p className="text-xs text-slate-500">Manage your candidate profile</p>
+              <h1 className="text-lg font-semibold text-slate-800">Edit Profile</h1>
+              <p className="text-xs text-slate-500">Update your candidate information</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => fetchProfile()}
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-            Refresh
-          </Button>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-slate-600"
+              onClick={() => fetchProfile()}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
+              onClick={handleSaveProfile}
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Changes
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6 space-y-6">
+
+        {/* Profile Header & Photo Card */}
+        <Card className="border border-slate-200/80 shadow-sm bg-white">
+          <CardContent className="pt-6 pb-6">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="relative group">
+                <Avatar className="h-24 w-24 border-2 border-violet-200 shadow-sm">
+                  {formData.avatarUrl ? (
+                    <AvatarImage src={formData.avatarUrl} alt={formData.fullName} />
+                  ) : (
+                    <AvatarFallback className="bg-violet-100 text-violet-700 text-2xl font-bold">
+                      {formData.fullName ? formData.fullName.slice(0, 2).toUpperCase() : "CA"}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <label
+                  htmlFor="photoUpload"
+                  className="absolute bottom-0 right-0 p-2 rounded-full bg-violet-600 text-white shadow-md cursor-pointer hover:bg-violet-700 transition-colors"
+                  title="Change Profile Photo"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </label>
+                <input
+                  id="photoUpload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </div>
+
+              <div className="flex-1 text-center sm:text-left space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {formData.fullName || "Candidate Name"}
+                </h2>
+                <p className="text-sm text-slate-500">{formData.email || "email@example.com"}</p>
+                <div className="flex flex-wrap justify-center sm:justify-start gap-2 pt-1">
+                  {formData.targetRole && (
+                    <Badge variant="secondary" className="bg-violet-50 text-violet-700 border-violet-200">
+                      {formData.targetRole}
+                    </Badge>
+                  )}
+                  {formData.targetCompany && (
+                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                      {formData.targetCompany}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tabbed Form Sections */}
         <Tabs defaultValue="personal" className="space-y-4">
-          <TabsList>
+          <TabsList className="bg-white border border-slate-200 p-1">
             <TabsTrigger value="personal">Personal</TabsTrigger>
             <TabsTrigger value="career">Career</TabsTrigger>
             <TabsTrigger value="links">Links</TabsTrigger>
@@ -198,10 +361,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="fullName">Full Name</Label>
                     <Input
                       id="fullName"
-                      value={profile?.fullName ?? ""}
-                      onChange={(e) =>
-                        handleSave({ fullName: e.target.value })
-                      }
+                      value={formData.fullName}
+                      onChange={(e) => handleInputChange("fullName", e.target.value)}
                       placeholder="Your full name"
                     />
                   </div>
@@ -210,10 +371,8 @@ export default function CandidateProfilePage() {
                     <Input
                       id="email"
                       type="email"
-                      value={profile?.email ?? ""}
-                      onChange={(e) =>
-                        handleSave({ email: e.target.value })
-                      }
+                      value={formData.email}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
                       placeholder="you@example.com"
                     />
                   </div>
@@ -224,10 +383,8 @@ export default function CandidateProfilePage() {
                     <Input
                       id="phone"
                       type="tel"
-                      value={profile?.phone ?? ""}
-                      onChange={(e) =>
-                        handleSave({ phone: e.target.value })
-                      }
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
                       placeholder="+1 234 567 890"
                     />
                   </div>
@@ -235,20 +392,13 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="location">Location</Label>
                     <Input
                       id="location"
-                      value={profile?.location ?? ""}
-                      onChange={(e) =>
-                        handleSave({ location: e.target.value })
-                      }
+                      value={formData.location}
+                      onChange={(e) => handleInputChange("location", e.target.value)}
                       placeholder="City, State, Country"
                     />
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => fetchProfile()}>
-                  Reset
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
@@ -268,10 +418,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="targetCompany">Target Company</Label>
                     <Input
                       id="targetCompany"
-                      value={profile?.targetCompany ?? ""}
-                      onChange={(e) =>
-                        handleSave({ targetCompany: e.target.value })
-                      }
+                      value={formData.targetCompany}
+                      onChange={(e) => handleInputChange("targetCompany", e.target.value)}
                       placeholder="e.g. Google, Microsoft"
                     />
                   </div>
@@ -279,10 +427,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="targetRole">Target Role</Label>
                     <Input
                       id="targetRole"
-                      value={profile?.targetRole ?? ""}
-                      onChange={(e) =>
-                        handleSave({ targetRole: e.target.value })
-                      }
+                      value={formData.targetRole}
+                      onChange={(e) => handleInputChange("targetRole", e.target.value)}
                       placeholder="e.g. Software Engineer"
                     />
                   </div>
@@ -292,18 +438,16 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="targetDomain">Domain</Label>
                     <Input
                       id="targetDomain"
-                      value={profile?.targetDomain ?? ""}
-                      onChange={(e) =>
-                        handleSave({ targetDomain: e.target.value })
-                      }
+                      value={formData.targetDomain}
+                      onChange={(e) => handleInputChange("targetDomain", e.target.value)}
                       placeholder="e.g. Web Development"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="experienceLevel">Experience Level</Label>
                     <Select
-                      value={profile?.experienceLevel ?? ""}
-                      onValueChange={(v) => handleSave({ experienceLevel: v })}
+                      value={formData.experienceLevel}
+                      onValueChange={(v) => handleInputChange("experienceLevel", v)}
                     >
                       <SelectTrigger id="experienceLevel">
                         <SelectValue placeholder="Select experience level" />
@@ -319,11 +463,6 @@ export default function CandidateProfilePage() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => fetchProfile()}>
-                  Reset
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
@@ -346,10 +485,8 @@ export default function CandidateProfilePage() {
                       <Input
                         id="portfolioUrl"
                         type="url"
-                        value={profile?.portfolioUrl ?? ""}
-                        onChange={(e) =>
-                          handleSave({ portfolioUrl: e.target.value })
-                        }
+                        value={formData.portfolioUrl}
+                        onChange={(e) => handleInputChange("portfolioUrl", e.target.value)}
                         placeholder="https://yourportfolio.com"
                       />
                     </div>
@@ -361,10 +498,8 @@ export default function CandidateProfilePage() {
                       <Input
                         id="githubUrl"
                         type="url"
-                        value={profile?.githubUrl ?? ""}
-                        onChange={(e) =>
-                          handleSave({ githubUrl: e.target.value })
-                        }
+                        value={formData.githubUrl}
+                        onChange={(e) => handleInputChange("githubUrl", e.target.value)}
                         placeholder="https://github.com/yourname"
                       />
                     </div>
@@ -377,20 +512,13 @@ export default function CandidateProfilePage() {
                     <Input
                       id="leetcodeUrl"
                       type="url"
-                      value={profile?.leetcodeUrl ?? ""}
-                      onChange={(e) =>
-                        handleSave({ leetcodeUrl: e.target.value })
-                      }
+                      value={formData.leetcodeUrl}
+                      onChange={(e) => handleInputChange("leetcodeUrl", e.target.value)}
                       placeholder="https://leetcode.com/yourname"
                     />
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => fetchProfile()}>
-                  Reset
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
@@ -405,7 +533,6 @@ export default function CandidateProfilePage() {
                 <CardDescription>Add your technical skills and competencies</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Add skill form */}
                 <div className="flex flex-wrap gap-2 items-center p-3 rounded-lg border border-slate-200 bg-white/50">
                   <Input
                     placeholder="Add a skill..."
@@ -441,7 +568,6 @@ export default function CandidateProfilePage() {
                   </Button>
                 </div>
 
-                {/* Skill tags display */}
                 {skills.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-sm">
                     No skills added yet. Add your first skill above.
@@ -506,10 +632,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="university">University</Label>
                     <Input
                       id="university"
-                      value={profile?.university ?? ""}
-                      onChange={(e) =>
-                        handleSave({ university: e.target.value })
-                      }
+                      value={formData.university}
+                      onChange={(e) => handleInputChange("university", e.target.value)}
                       placeholder="e.g. MIT, Stanford"
                     />
                   </div>
@@ -517,10 +641,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="degree">Degree</Label>
                     <Input
                       id="degree"
-                      value={profile?.degree ?? ""}
-                      onChange={(e) =>
-                        handleSave({ degree: e.target.value })
-                      }
+                      value={formData.degree}
+                      onChange={(e) => handleInputChange("degree", e.target.value)}
                       placeholder="e.g. B.Tech, M.S."
                     />
                   </div>
@@ -530,10 +652,8 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="department">Department / Major</Label>
                     <Input
                       id="department"
-                      value={profile?.department ?? ""}
-                      onChange={(e) =>
-                        handleSave({ department: e.target.value })
-                      }
+                      value={formData.department}
+                      onChange={(e) => handleInputChange("department", e.target.value)}
                       placeholder="e.g. Computer Science"
                     />
                   </div>
@@ -542,12 +662,8 @@ export default function CandidateProfilePage() {
                     <Input
                       id="graduationYear"
                       type="number"
-                      value={profile?.graduationYear ?? ""}
-                      onChange={(e) =>
-                        handleSave({
-                          graduationYear: e.target.value ? parseInt(e.target.value) : null,
-                        })
-                      }
+                      value={formData.graduationYear}
+                      onChange={(e) => handleInputChange("graduationYear", e.target.value)}
                       placeholder="2024"
                     />
                   </div>
@@ -559,12 +675,8 @@ export default function CandidateProfilePage() {
                       id="cgpa"
                       type="number"
                       step="0.01"
-                      value={profile?.cgpa ?? ""}
-                      onChange={(e) =>
-                        handleSave({
-                          cgpa: e.target.value ? parseFloat(e.target.value) : null,
-                        })
-                      }
+                      value={formData.cgpa}
+                      onChange={(e) => handleInputChange("cgpa", e.target.value)}
                       placeholder="e.g. 8.5"
                     />
                   </div>
@@ -572,20 +684,13 @@ export default function CandidateProfilePage() {
                     <Label htmlFor="relevantCoursework">Relevant Coursework</Label>
                     <Input
                       id="relevantCoursework"
-                      value={profile?.relevantCoursework ?? ""}
-                      onChange={(e) =>
-                        handleSave({ relevantCoursework: e.target.value })
-                      }
+                      value={formData.relevantCoursework}
+                      onChange={(e) => handleInputChange("relevantCoursework", e.target.value)}
                       placeholder="e.g. Data Structures, Algorithms"
                     />
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => fetchProfile()}>
-                  Reset
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
@@ -600,7 +705,6 @@ export default function CandidateProfilePage() {
                 <CardDescription>Upload and manage your certification documents</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Upload area */}
                 <div className="flex flex-wrap items-center gap-3 p-4 rounded-lg border-2 border-dashed border-slate-200 bg-white/50 hover:bg-white hover:border-violet-300 transition-all cursor-pointer">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-600">
                     <Upload className="h-5 w-5" />
@@ -630,7 +734,6 @@ export default function CandidateProfilePage() {
                   )}
                 </div>
 
-                {/* Certificate list */}
                 {certificates.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-sm">
                     No certificates uploaded yet.
@@ -683,13 +786,18 @@ export default function CandidateProfilePage() {
           </TabsContent>
         </Tabs>
 
-        {/* Save indicator */}
-        {saving && (
-          <div className="fixed bottom-4 right-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-medium shadow-lg animate-pulse">
-            <Loader2 className="h-4 w-4" />
-            Saving…
-          </div>
-        )}
+        {/* Floating save button */}
+        <div className="flex justify-end pt-4">
+          <Button
+            size="lg"
+            className="gap-2 bg-violet-600 hover:bg-violet-700 text-white shadow-md"
+            onClick={handleSaveProfile}
+            disabled={saving}
+          >
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            Save All Changes
+          </Button>
+        </div>
       </main>
     </div>
   );

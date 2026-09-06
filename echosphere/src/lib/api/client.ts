@@ -121,6 +121,12 @@ export const candidateApi = {
     fetch(`${apiBase()}/api/candidate/resume`, { method: "POST", body: form, credentials: "include" }),
   certificates: (form: FormData) =>
     fetch(`${apiBase()}/api/candidate/certificates`, { method: "POST", body: form, credentials: "include" }),
+  systemCheck: (body: { camera: boolean; microphone: boolean; screen_share: boolean; network: boolean }) =>
+    api.post<{ status: string; camera: string; microphone: string; screen_share: string; network: string; message: string }>("/api/candidate/system-check", body),
+  sampleVideo: (form: FormData) =>
+    fetch(`${apiBase()}/api/candidate/sample-video`, { method: "POST", body: form, credentials: "include" }),
+  analysis: () =>
+    api.get<{ data: Record<string, any> }>("/api/candidate/analysis"),
 };
 
 export const interviewApi = {

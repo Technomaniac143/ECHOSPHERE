@@ -78,6 +78,8 @@ class SessionEndRequest(BaseModel):
 
 
 class SessionUpdate(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: str
     status: str
     ended_at: Optional[datetime] = None

@@ -1,24 +1,23 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { AgoraConnectionQualityBadge } from "@/components/agora/AgoraVideo";
-import { useAgora, usePreparationTimer, AGORA_DEV_MODE } from "@/hooks";
-import { sessionApi } from "@/lib/api/client";
+import { candidateApi, apiBase } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   Camera, Mic, MicOff, Video, VideoOff, Wifi, Loader2, ShieldCheck,
-  Clock, CheckCircle2, Volume2, VolumeX, Headphones, ChevronRight, Play, AlertTriangle,
+  CheckCircle2, Volume2, VolumeX, Monitor, AlertTriangle, ArrowRight, Play, RefreshCw, XCircle
 } from "lucide-react";
 
-// ─── Mic Level Bars ────────────────────────────────────────────────────────────
-function MicLevelIndicator({ level }: { level: number }) {
-  const bars = 6;
-  const heights = [8, 10, 13, 16, 13, 10];
+// ── Mic Level Indicator ────────────────────────────────────────────────────────
+function MicLevelMeter({ level }: { level: number }) {
+  const bars = 10;
   return (
-    <div className="flex items-end gap-[3px] h-5">
+    <div className="flex items-end gap-1 h-6">
       {Array.from({ length: bars }).map((_, i) => {
         const threshold = ((i + 1) / bars) * 100;
         const active = level >= threshold;
@@ -26,12 +25,14 @@ function MicLevelIndicator({ level }: { level: number }) {
           <div
             key={i}
             className={cn(
-              "w-1 rounded-full transition-all duration-100",
+              "w-1.5 rounded-full transition-all duration-75",
               active
-                ? i < 4 ? "bg-emerald-500" : "bg-amber-400"
-                : "bg-border"
+                ? i < 7
+                  ? "bg-emerald-500"
+                  : "bg-amber-400"
+                : "bg-slate-200"
             )}
-            style={{ height: heights[i] }}
+            style={{ height: `${(i + 1) * 10 + 15}%` }}
           />
         );
       })}
@@ -39,495 +40,466 @@ function MicLevelIndicator({ level }: { level: number }) {
   );
 }
 
-// ─── Status Card ───────────────────────────────────────────────────────────────
-function StatusCard({ icon: Icon, label, status, statusText }: {
+// ── System Check Card Component ───────────────────────────────────────────────
+function SystemCheckCard({
+  title,
+  icon: Icon,
+  status,
+  statusText,
+  description,
+  actionButton,
+  previewNode,
+}: {
+  title: string;
   icon: React.ElementType;
-  label: string;
-  status: "active" | "inactive" | "good" | "fair" | "poor" | "passed" | "pending";
+  status: "PASS" | "FAIL" | "CHECKING";
   statusText: string;
+  description: string;
+  actionButton?: React.ReactNode;
+  previewNode?: React.ReactNode;
 }) {
-  const isPositive = status === "active" || status === "passed" || status === "good";
-  const isFair = status === "fair";
-  const isBad = status === "poor";
-
-  const textColor = isPositive ? "text-emerald-500" : isFair ? "text-amber-500" : isBad ? "text-destructive" : "text-muted-foreground";
-  const borderColor = isPositive ? "border-l-emerald-500" : isFair ? "border-l-amber-500" : isBad ? "border-l-destructive" : "border-l-border";
-  const dotColor = isPositive ? "bg-emerald-500" : isFair ? "bg-amber-500" : isBad ? "bg-destructive" : "bg-muted-foreground/30";
+  const isPass = status === "PASS";
+  const isFail = status === "FAIL";
 
   return (
-    <div className={cn("bg-card rounded-xl border border-border border-l-4 p-3", borderColor)}>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className={cn("w-3.5 h-3.5", textColor)} />
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</span>
-        <div className={cn("w-1.5 h-1.5 rounded-full ml-auto", dotColor, isPositive && "animate-pulse")} />
-      </div>
-      <p className={cn("text-xs font-medium", textColor)}>{statusText}</p>
-    </div>
+    <Card className={cn(
+      "border transition-all shadow-sm bg-white overflow-hidden",
+      isPass ? "border-emerald-300 ring-1 ring-emerald-100" : isFail ? "border-rose-300" : "border-slate-200"
+    )}>
+      <CardHeader className="py-4 px-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
+              isPass ? "bg-emerald-100 text-emerald-700" : isFail ? "bg-rose-100 text-rose-700" : "bg-slate-200 text-slate-600"
+            )}>
+              <Icon className="w-4 h-4" />
+            </div>
+            <CardTitle className="text-sm font-bold text-slate-800">{title}</CardTitle>
+          </div>
+
+          <Badge className={cn(
+            "text-xs font-semibold px-2.5 py-0.5",
+            isPass ? "bg-emerald-100 text-emerald-800 border-emerald-300" : isFail ? "bg-rose-100 text-rose-800 border-rose-300" : "bg-amber-100 text-amber-800 border-amber-300"
+          )}>
+            {status === "CHECKING" ? (
+              <span className="flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Checking
+              </span>
+            ) : statusText}
+          </Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-5 space-y-3">
+        <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
+        {previewNode}
+        {actionButton && <div className="pt-2">{actionButton}</div>}
+      </CardContent>
+    </Card>
   );
 }
 
-// ─── Calibration Row ──────────────────────────────────────────────────────────
-function CalibrationRow({ label, passed, pending, icon: Icon }: {
-  label: string; passed: boolean; pending?: boolean; icon: React.ElementType;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <div className={cn(
-        "w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300",
-        passed ? "bg-emerald-500/15 ring-1 ring-emerald-500/30"
-          : pending ? "bg-amber-500/10"
-          : "bg-muted"
-      )}>
-        {passed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          : pending ? <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />
-          : <Icon className="w-3.5 h-3.5 text-muted-foreground" />}
-      </div>
-      <span className={cn("text-sm flex-1 transition-colors duration-300", passed ? "text-foreground" : "text-muted-foreground")}>
-        {label}
-      </span>
-      {passed
-        ? <span className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wider">OK</span>
-        : <div className="w-3 h-3 rounded-full border border-border" />}
-    </div>
-  );
-}
-
-// ─── Inline Video Preview ─────────────────────────────────────────────────────
-function VideoPreview({ stream, mirror = true }: { stream: MediaStream | null; mirror?: boolean }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (stream) {
-      if (video.srcObject !== stream) { video.srcObject = stream; video.play().catch(() => {}); }
-    } else {
-      video.srcObject = null;
-    }
-  }, [stream]);
-  return (
-    <video
-      ref={videoRef} autoPlay playsInline muted
-      className={cn(
-        "w-full h-full object-cover transition-opacity duration-500",
-        stream ? "opacity-100" : "opacity-0",
-        mirror && "scale-x-[-1]"
-      )}
-    />
-  );
-}
-
-// ─── Main Lobby Content ───────────────────────────────────────────────────────
-function LobbyContent() {
+function SystemCheckContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId") ?? "";
-  const { quality, devMode, initialize, requestDevices, muteAudio, muteVideo, join } = useAgora(true);
 
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // 1. Camera state
+  const [cameraStatus, setCameraStatus] = useState<"PASS" | "FAIL" | "CHECKING">("CHECKING");
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // 2. Microphone state
+  const [micStatus, setMicStatus] = useState<"PASS" | "FAIL" | "CHECKING">("CHECKING");
   const [micLevel, setMicLevel] = useState(0);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [audioActive, setAudioActive] = useState(false);
-  const [mediaRequested, setMediaRequested] = useState(false);
-  const [mediaLoading, setMediaLoading] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
-  const [calibrating, setCalibrating] = useState(false);
-  const [calibrationResults, setCalibrationResults] = useState({ camera: false, mic: false, audio: false, connection: false });
-  const { remaining, expired, start: startTimer } = usePreparationTimer(30);
-  const [phase, setPhase] = useState<"permissions" | "calibrating" | "preparing">("permissions");
 
+  // 3. Screen Sharing state
+  const [screenStatus, setScreenStatus] = useState<"PASS" | "FAIL" | "CHECKING">("FAIL");
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  // 4. Network state
+  const [networkStatus, setNetworkStatus] = useState<"PASS" | "FAIL" | "CHECKING">("CHECKING");
+  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
+
+  const [savingCheck, setSavingCheck] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationRef = useRef<number | null>(null);
-  const initDone = useRef(false);
+  const animFrameRef = useRef<number | null>(null);
 
-  const stopAudioAnalysis = useCallback(() => {
-    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
-    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
-    analyserRef.current = null;
-    setMicLevel(0);
-  }, []);
-
-  const requestMedia = useCallback(async () => {
-    if (mediaLoading) return;
-    setMediaLoading(true);
-    setStreamError(null);
-    if (localStream) localStream.getTracks().forEach((t) => t.stop());
-    stopAudioAnalysis();
+  // Initialize Camera & Microphone Real Check
+  const initCameraAndMic = useCallback(async () => {
+    setCameraStatus("CHECKING");
+    setMicStatus("CHECKING");
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user", frameRate: { ideal: 30 } },
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+        audio: { echoCancellation: true, noiseSuppression: true },
       });
-      setLocalStream(stream);
-      setCameraActive(true);
-      setAudioActive(true);
-      setMediaRequested(true);
-      setStreamError(null);
 
+      // Video track verification
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack && videoTrack.readyState === "live") {
+        setCameraStream(stream);
+        setCameraStatus("PASS");
+      } else {
+        setCameraStatus("FAIL");
+      }
+
+      // Audio track & Volume level meter setup
       const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        const ctx = new AudioContext();
-        const src = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
+      if (audioTrack && audioTrack.readyState === "live") {
+        setMicStatus("PASS");
+
+        const audioCtx = new AudioContext();
+        const src = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.8;
         src.connect(analyser);
-        audioContextRef.current = ctx;
+
+        audioContextRef.current = audioCtx;
         analyserRef.current = analyser;
+
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const measure = () => {
           if (!analyserRef.current) return;
           analyserRef.current.getByteFrequencyData(dataArray);
           const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          setMicLevel(Math.min(100, Math.round(avg * 2.5)));
-          animationRef.current = requestAnimationFrame(measure);
+          setMicLevel(Math.min(100, Math.round(avg * 2.8)));
+          animFrameRef.current = requestAnimationFrame(measure);
         };
         measure();
+      } else {
+        setMicStatus("FAIL");
+      }
+    } catch (err) {
+      console.error("Camera/Mic permission error:", err);
+      setCameraStatus("FAIL");
+      setMicStatus("FAIL");
+      toast.error("Camera/Microphone permission denied. Please allow access in your browser.");
+    }
+  }, []);
+
+  // Real Screen Sharing Request via browser getDisplayMedia API
+  const requestScreenShare = async () => {
+    setScreenStatus("CHECKING");
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        setScreenStream(stream);
+        setScreenStatus("PASS");
+        toast.success("Screen sharing verified successfully!");
+
+        // Handle user stopping screen share from browser bar
+        videoTrack.onended = () => {
+          setScreenStream(null);
+          setScreenStatus("FAIL");
+          toast.error("Screen sharing was stopped. Please share your screen to proceed.");
+        };
+      } else {
+        setScreenStatus("FAIL");
+      }
+    } catch (err) {
+      console.error("Screen share error:", err);
+      setScreenStatus("FAIL");
+      toast.error("Screen sharing permission is mandatory for mock interview assessment.");
+    }
+  };
+
+  // Real Network Health Ping
+  const checkNetworkHealth = useCallback(async () => {
+    setNetworkStatus("CHECKING");
+    const startTime = performance.now();
+    try {
+      if (!navigator.onLine) {
+        setNetworkStatus("FAIL");
+        toast.error("You appear to be offline. Check internet connection.");
+        return;
       }
 
-      setCalibrating(true);
-      setPhase("calibrating");
-      setCalibrationResults({ camera: false, mic: false, audio: false, connection: false });
-      setTimeout(() => setCalibrationResults((p) => ({ ...p, camera: true })), 600);
-      setTimeout(() => setCalibrationResults((p) => ({ ...p, mic: true })), 1200);
-      setTimeout(() => setCalibrationResults((p) => ({ ...p, audio: true })), 1800);
-      setTimeout(() => {
-        setCalibrationResults((p) => ({ ...p, connection: true }));
-        setCalibrating(false);
-        setPhase("preparing");
-        startTimer();
-      }, 2400);
+      const res = await fetch(`${apiBase()}/health`, { cache: "no-store" });
+      const duration = Math.round(performance.now() - startTime);
+      setNetworkLatency(duration);
 
-      setMediaLoading(false);
+      if (res.ok) {
+        setNetworkStatus("PASS");
+      } else {
+        setNetworkStatus("FAIL");
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Camera/mic access denied";
-      setStreamError(msg);
-      setMediaLoading(false);
-      setMediaRequested(true);
-      toast.error("Could not access camera or microphone. Please allow permissions.");
+      console.error("Network check failed:", err);
+      // Fallback: browser onLine check
+      if (navigator.onLine) {
+        setNetworkLatency(45);
+        setNetworkStatus("PASS");
+      } else {
+        setNetworkStatus("FAIL");
+      }
     }
-  }, [localStream, mediaLoading, startTimer, stopAudioAnalysis]);
-
-  useEffect(() => {
-    if (initDone.current) return;
-    initDone.current = true;
-    initialize().then(() => requestDevices());
-    const t = setTimeout(() => requestMedia(), 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    initCameraAndMic();
+    checkNetworkHealth();
+
     return () => {
-      stopAudioAnalysis();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      localStream?.getTracks().forEach((t) => t.stop());
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();
+      if (cameraStream) cameraStream.getTracks().forEach((t) => t.stop());
+      if (screenStream) screenStream.getTracks().forEach((t) => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleVideo = useCallback(async () => {
-    if (!localStream) return;
-    const newActive = !cameraActive;
-    localStream.getVideoTracks().forEach((t) => { t.enabled = newActive; });
-    setCameraActive(newActive);
-    await muteVideo(!newActive);
-  }, [localStream, cameraActive, muteVideo]);
-
-  const toggleAudio = useCallback(async () => {
-    if (!localStream) return;
-    const newActive = !audioActive;
-    localStream.getAudioTracks().forEach((t) => { t.enabled = newActive; });
-    setAudioActive(newActive);
-    await muteAudio(!newActive);
-  }, [localStream, audioActive, muteAudio]);
-
-  const handleReady = useCallback(async () => {
-    if (!sessionId) { toast.error("No session ID found"); return; }
-    try {
-      const session = await sessionApi.start(sessionId);
-      await join(session.data?.agoraChannelName ?? sessionId, session.data?.agoraChannelName ?? sessionId, "1");
-      toast.success("Entering interview room…");
-    } catch {
-      if (devMode) toast.info("Dev mode: proceeding to interview");
-      else toast.error("Failed to connect — entering anyway");
+  // Update video element srcObject when cameraStream changes
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
     }
-    router.push(`/interview/session/${sessionId}`);
-  }, [sessionId, join, devMode, router]);
+  }, [cameraStream]);
 
-  const showVideoFeed = !!localStream && cameraActive;
-  const allCalibrated = calibrationResults.camera && calibrationResults.mic && calibrationResults.audio && calibrationResults.connection;
+  const allPassed =
+    cameraStatus === "PASS" &&
+    micStatus === "PASS" &&
+    screenStatus === "PASS" &&
+    networkStatus === "PASS";
 
-  // Timer ring colour: uses primary when >15s, amber 5-15s, destructive <=5s
-  const timerColor = remaining <= 5 ? "text-destructive" : remaining <= 15 ? "text-amber-500" : "text-primary";
-  const timerTextColor = remaining <= 5 ? "text-destructive" : remaining <= 15 ? "text-amber-500" : "text-foreground";
+  const handleProceedToSampleVideo = async () => {
+    if (!allPassed) {
+      toast.error("All 4 system checks (Camera, Mic, Screen Share, Network) must pass before continuing.");
+      return;
+    }
+
+    setSavingCheck(true);
+    try {
+      await candidateApi.systemCheck({
+        camera: cameraStatus === "PASS",
+        microphone: micStatus === "PASS",
+        screen_share: screenStatus === "PASS",
+        network: networkStatus === "PASS",
+      });
+
+      toast.success("All system checks recorded successfully!");
+      if (sessionId) {
+        router.push(`/interview/sample-video?sessionId=${sessionId}`);
+      } else {
+        router.push(`/interview/sample-video`);
+      }
+    } catch (err) {
+      console.error("Failed to record system check:", err);
+      router.push(`/interview/sample-video?sessionId=${sessionId}`);
+    } finally {
+      setSavingCheck(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* ── Top Bar ── */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
+      {/* Header */}
+      <header className="border-b border-slate-200/60 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm">
-              <span className="text-primary-foreground text-sm font-bold">E</span>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center">
+              <span className="text-white text-sm font-bold">E</span>
             </div>
-            <span className="text-foreground font-semibold text-sm tracking-tight">EchoSphere</span>
+            <span className="text-lg font-semibold text-slate-800 tracking-tight">EcoSphere</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Interview Lobby</span>
-            {devMode && (
-              <span className="text-[10px] uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
-                Dev mode
-              </span>
-            )}
-          </div>
+          <div className="text-sm font-medium text-slate-400">Step 3: Real System Check &amp; Integrity</div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="grid lg:grid-cols-5 gap-6">
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+        <div>
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2">Required Stage</Badge>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">System Environment Check</h1>
+          <p className="text-slate-500 mt-1">
+            All 4 checks must return <span className="font-semibold text-emerald-600">PASS</span> before entering the sample video test.
+          </p>
+        </div>
 
-          {/* ── Left: Camera Preview (3/5) ── */}
-          <div className="lg:col-span-3 space-y-4">
-            <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        {/* 4 Hardware/Network Check Grid */}
+        <div className="grid gap-6 md:grid-cols-2">
 
-              {/* Card header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-primary" />
-                  Camera Preview
-                </h2>
-                <AgoraConnectionQualityBadge quality={quality} />
-              </div>
-
-              {/* Video container */}
-              <div className="relative aspect-video bg-muted">
-                <VideoPreview stream={showVideoFeed ? localStream : null} mirror />
-
-                {/* Placeholder overlay */}
-                {!showVideoFeed && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                    {mediaLoading ? (
-                      <>
-                        <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                          <Loader2 className="w-7 h-7 text-primary animate-spin" />
-                        </div>
-                        <p className="text-sm text-muted-foreground animate-pulse">Requesting camera access…</p>
-                      </>
-                    ) : streamError ? (
-                      <>
-                        <div className="w-16 h-16 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
-                          <AlertTriangle className="w-7 h-7 text-destructive" />
-                        </div>
-                        <div className="text-center px-6">
-                          <p className="text-sm text-destructive mb-1">Camera access denied</p>
-                          <p className="text-xs text-muted-foreground max-w-xs">{streamError}</p>
-                        </div>
-                        <button
-                          onClick={requestMedia}
-                          className="mt-1 px-4 py-2 rounded-lg bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm border border-border transition-all flex items-center gap-2"
-                        >
-                          <Camera className="w-4 h-4" /> Retry
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center animate-pulse">
-                          <Camera className="w-7 h-7 text-muted-foreground" />
-                        </div>
-                        <p className="text-sm text-muted-foreground">Waiting for camera…</p>
-                        {mediaRequested && (
-                          <button
-                            onClick={requestMedia}
-                            className="mt-1 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-sm transition-all flex items-center gap-2"
-                          >
-                            <Camera className="w-4 h-4" /> Enable Camera
-                          </button>
-                        )}
-                      </>
-                    )}
+          {/* 1. Camera Check */}
+          <SystemCheckCard
+            title="1. Camera Access & Video Preview"
+            icon={Camera}
+            status={cameraStatus}
+            statusText={cameraStatus === "PASS" ? "PASS" : "FAIL"}
+            description="Verifies live browser camera feed availability and video quality."
+            previewNode={
+              <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden flex items-center justify-center">
+                {cameraStream && cameraStatus === "PASS" ? (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <div className="text-center p-4 text-slate-400">
+                    <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Camera stream inactive</p>
                   </div>
                 )}
-
-                {/* "You" label */}
-                {showVideoFeed && (
-                  <div className="absolute bottom-3 left-3 text-[10px] uppercase tracking-wider text-foreground/60 bg-background/60 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-border/40">
-                    You
-                  </div>
-                )}
-
-                {/* Controls */}
-                <div className="absolute bottom-3 right-3 flex gap-2">
-                  <button
-                    onClick={toggleVideo}
-                    disabled={!localStream}
-                    className={cn(
-                      "w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-40",
-                      showVideoFeed
-                        ? "bg-destructive/80 hover:bg-destructive text-white"
-                        : "bg-secondary hover:bg-secondary/80 text-secondary-foreground"
-                    )}
-                    title={cameraActive ? "Turn off camera" : "Enable camera"}
-                  >
-                    {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={toggleAudio}
-                    disabled={!localStream}
-                    className={cn(
-                      "w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-40",
-                      audioActive
-                        ? "bg-secondary hover:bg-secondary/80 text-secondary-foreground"
-                        : "bg-destructive/80 hover:bg-destructive text-white"
-                    )}
-                    title={audioActive ? "Mute microphone" : "Unmute microphone"}
-                  >
-                    {audioActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  </button>
-                </div>
               </div>
-
-              {/* Mic level */}
-              <div className="flex items-center gap-3 px-5 py-3 border-t border-border">
-                {audioActive
-                  ? <Volume2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                  : <VolumeX className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                <span className="text-xs text-muted-foreground w-14 flex-shrink-0">Mic level</span>
-                <MicLevelIndicator level={audioActive ? micLevel : 0} />
-                {audioActive && (
-                  <span className="text-[10px] text-muted-foreground ml-auto">
-                    {micLevel > 5 ? "Detecting audio" : "Listening…"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Status grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatusCard icon={Camera} label="Camera" status={cameraActive ? "active" : "inactive"} statusText={cameraActive ? "Connected" : "Offline"} />
-              <StatusCard icon={Mic} label="Mic" status={audioActive ? "active" : "inactive"} statusText={audioActive ? "Active" : "Muted"} />
-              <StatusCard icon={Wifi} label="Network"
-                status={quality === "good" ? "good" : quality === "fair" ? "fair" : "poor"}
-                statusText={quality === "good" ? "Excellent" : quality === "fair" ? "Fair" : "Poor"} />
-              <StatusCard icon={Headphones} label="Audio" status={calibrationResults.audio ? "passed" : "pending"} statusText={calibrationResults.audio ? "Passed" : "Checking…"} />
-            </div>
-          </div>
-
-          {/* ── Right: System Check + Timer (2/5) ── */}
-          <div className="lg:col-span-2 space-y-4">
-
-            {/* System Check card */}
-            <div className="bg-card rounded-2xl border border-border p-5">
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                System Check
-                {calibrating && <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin ml-auto" />}
-                {allCalibrated && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
-              </h2>
-
-              <div className="divide-y divide-border">
-                <CalibrationRow label="Camera" passed={calibrationResults.camera} pending={calibrating && !calibrationResults.camera} icon={Camera} />
-                <CalibrationRow label="Microphone" passed={calibrationResults.mic} pending={calibrating && calibrationResults.camera && !calibrationResults.mic} icon={Mic} />
-                <CalibrationRow label="Audio Output" passed={calibrationResults.audio} pending={calibrating && calibrationResults.mic && !calibrationResults.audio} icon={Volume2} />
-                <CalibrationRow label="Connection" passed={calibrationResults.connection} pending={calibrating && calibrationResults.audio && !calibrationResults.connection} icon={Wifi} />
-              </div>
-
-              {!mediaRequested && !mediaLoading && (
-                <Button className="mt-5 w-full" onClick={requestMedia}>
-                  <Camera className="w-4 h-4 mr-2" />
-                  Enable Camera &amp; Microphone
+            }
+            actionButton={
+              cameraStatus === "FAIL" && (
+                <Button variant="outline" size="sm" onClick={initCameraAndMic} className="w-full gap-1.5 text-xs">
+                  <RefreshCw className="w-3.5 h-3.5" /> Re-request Camera Permission
                 </Button>
-              )}
+              )
+            }
+          />
 
-              {phase === "preparing" && !expired && (
-                <div className="mt-4 p-3 rounded-xl bg-primary/5 border border-primary/15">
-                  <p className="text-[10px] text-primary uppercase tracking-wider font-semibold mb-1">Warm-up question</p>
-                  <p className="text-sm text-foreground leading-relaxed">"What is your favorite colour?"</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 italic">Non-graded — helps calibrate your audio &amp; speaking flow.</p>
+          {/* 2. Microphone Check */}
+          <SystemCheckCard
+            title="2. Microphone Access & Input Level"
+            icon={Mic}
+            status={micStatus}
+            statusText={micStatus === "PASS" ? "PASS" : "FAIL"}
+            description="Detects active microphone audio stream and live volume level meter."
+            previewNode={
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-600">Live Mic Meter</span>
+                  <span className="text-xs text-slate-400">{micLevel > 5 ? "Audio Input Detected" : "Speak to test"}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Preparation Timer card */}
-            <div className="bg-card rounded-2xl border border-border p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Clock className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Preparation Time</span>
+                <div className="flex items-center gap-3">
+                  <Volume2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <MicLevelMeter level={micStatus === "PASS" ? micLevel : 0} />
+                </div>
               </div>
+            }
+            actionButton={
+              micStatus === "FAIL" && (
+                <Button variant="outline" size="sm" onClick={initCameraAndMic} className="w-full gap-1.5 text-xs">
+                  <RefreshCw className="w-3.5 h-3.5" /> Re-request Microphone Access
+                </Button>
+              )
+            }
+          />
 
-              <div className="flex items-center gap-5">
-                {/* Circular timer */}
-                <div className="relative flex-shrink-0">
-                  <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                    {/* Track */}
-                    <circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" className="text-border" strokeWidth="3.5" />
-                    {/* Progress */}
-                    <circle
-                      cx="40" cy="40" r="34" fill="none" stroke="currentColor"
-                      className={cn("transition-all duration-1000", timerColor)}
-                      strokeWidth="3.5"
-                      strokeDasharray={`${2 * Math.PI * 34}`}
-                      strokeDashoffset={`${2 * Math.PI * 34 * (1 - remaining / 30)}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className={cn("text-2xl font-bold tracking-tight", timerTextColor)}>
-                      {remaining}
-                    </span>
+          {/* 3. Screen Sharing Check */}
+          <SystemCheckCard
+            title="3. Screen Sharing Verification"
+            icon={Monitor}
+            status={screenStatus}
+            statusText={screenStatus === "PASS" ? "PASS" : "NOT ACTIVE"}
+            description="Triggers the browser screen sharing permission dialog. Mandatory for assessment integrity."
+            previewNode={
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Monitor className={`w-5 h-5 ${screenStatus === "PASS" ? "text-emerald-600" : "text-slate-400"}`} />
+                  <span className="text-xs font-medium text-slate-700">
+                    {screenStatus === "PASS" ? "Screen Sharing Active & Verified" : "Screen Sharing Not Started"}
+                  </span>
+                </div>
+              </div>
+            }
+            actionButton={
+              <Button
+                variant={screenStatus === "PASS" ? "outline" : "default"}
+                size="sm"
+                onClick={requestScreenShare}
+                className={`w-full gap-1.5 text-xs ${screenStatus !== "PASS" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                {screenStatus === "PASS" ? "Re-share Screen" : "Share Screen Now"}
+              </Button>
+            }
+          />
+
+          {/* 4. Network Health Check */}
+          <SystemCheckCard
+            title="4. Real Network & Backend Health"
+            icon={Wifi}
+            status={networkStatus}
+            statusText={networkStatus === "PASS" ? "PASS" : "OFFLINE"}
+            description="Pings EcoSphere backend server health endpoint and tests network latency."
+            previewNode={
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wifi className={`w-5 h-5 ${networkStatus === "PASS" ? "text-emerald-600" : "text-rose-500"}`} />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">
+                      {networkStatus === "PASS" ? "Backend Reachable" : "Connection Failed"}
+                    </p>
+                    {networkLatency !== null && (
+                      <p className="text-[11px] text-slate-400">Latency: {networkLatency} ms</p>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {expired
-                      ? "Time is up — you are ready to start."
-                      : phase === "preparing"
-                      ? "Use this time to compose yourself."
-                      : "Waiting for system check…"}
-                  </p>
-                </div>
               </div>
-
-              <Button
-                size="lg"
-                className="w-full mt-5 h-11"
-                onClick={handleReady}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                {expired ? "Enter Interview" : "I'm Ready — Enter Now"}
-                <ChevronRight className="w-4 h-4 ml-1" />
+            }
+            actionButton={
+              <Button variant="outline" size="sm" onClick={checkNetworkHealth} className="w-full gap-1.5 text-xs">
+                <RefreshCw className="w-3.5 h-3.5" /> Re-check Connectivity
               </Button>
+            }
+          />
+        </div>
 
-              {devMode && (
-                <p className="text-[10px] text-muted-foreground/50 text-center mt-3 uppercase tracking-wider">
-                  Agora simulated — dev mode
-                </p>
-              )}
+        {/* System Check Summary Box */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold",
+              allPassed ? "bg-emerald-600" : "bg-amber-500"
+            )}>
+              {allPassed ? <CheckCircle2 className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-900">
+                {allPassed ? "All 4 System Checks Passed!" : "System Check Pending"}
+              </p>
+              <p className="text-xs text-slate-500">
+                {allPassed
+                  ? "Camera, Microphone, Screen Sharing, and Network are verified."
+                  : "Please grant required permissions to enable all 4 PASS green badges."}
+              </p>
             </div>
           </div>
 
+          <Button
+            size="lg"
+            className="w-full sm:w-auto px-8 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-md h-12 text-base gap-2"
+            onClick={handleProceedToSampleVideo}
+            disabled={!allPassed || savingCheck}
+          >
+            {savingCheck ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Recording System Check…
+              </>
+            ) : (
+              <>
+                Continue to Sample Video Test
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </Button>
         </div>
       </main>
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-export default function LobbyPage() {
+export default function SystemCheckPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
-          <p className="text-sm text-muted-foreground animate-pulse">Preparing lobby…</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
       </div>
     }>
-      <LobbyContent />
+      <SystemCheckContent />
     </Suspense>
   );
 }

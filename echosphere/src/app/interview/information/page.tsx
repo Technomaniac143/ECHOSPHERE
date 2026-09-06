@@ -1,416 +1,475 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { candidateApi } from "@/lib/api/client";
 import {
-  Building2,
-  Clock,
-  ChevronRight,
-  Video,
-  Mic,
-  Shield,
-  BarChart3,
-  Lightbulb,
-  ArrowRight,
-  CheckCircle2,
-  XCircle,
-  Users,
-  Headphones,
-  MessageSquare,
-  Target,
-  Eye,
-  Brain,
-  AlertTriangle,
-  Monitor,
+  FileText, Upload, FileCode, GraduationCap, Award, CheckCircle2, AlertCircle,
+  Plus, Trash2, ArrowRight, Loader2, Link as LinkIcon, Check, Sparkles, Building2, User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PERSONAS, type PersonaKey } from "@/types";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const FLOW_STEPS = [
-  {
-    icon: MessageSquare,
-    label: "Answer",
-    desc: "You respond to the interviewer's question",
-    color: "text-blue-500 bg-blue-50 border-blue-200",
-  },
-  {
-    icon: Brain,
-    label: "Understanding",
-    desc: "AI analyzes your answer in real time",
-    color: "text-violet-500 bg-violet-50 border-violet-200",
-  },
-  {
-    icon: Target,
-    label: "Context",
-    desc: "Relevant context and follow-ups are prepared",
-    color: "text-emerald-500 bg-emerald-50 border-emerald-200",
-  },
-  {
-    icon: BarChart3,
-    label: "Evaluation",
-    desc: "Your answer is scored against competencies",
-    color: "text-amber-500 bg-amber-50 border-amber-200",
-  },
-  {
-    icon: Shield,
-    label: "Difficulty",
-    desc: "Next question adjusts to your level",
-    color: "text-orange-500 bg-orange-50 border-orange-200",
-  },
-  {
-    icon: Users,
-    label: "Next Interviewer",
-    desc: "A new persona takes over the conversation",
-    color: "text-pink-500 bg-pink-50 border-pink-200",
-  },
-  {
-    icon: Headphones,
-    label: "Follow-up",
-    desc: "Deeper questions probe your thinking",
-    color: "text-cyan-500 bg-cyan-50 border-cyan-200",
-  },
-];
+interface CertificationItem {
+  id: string;
+  name: string;
+  issuer: string;
+  issueDate: string;
+  credentialUrl?: string;
+}
 
-const AVOID_ITEMS = [
-  {
-    icon: XCircle,
-    title: "Reading from a script",
-    desc: "Reading answers verbatim is easily detected and reduces your score.",
-  },
-  {
-    icon: XCircle,
-    title: "Looking off-screen constantly",
-    desc: "Frequent gaze shifts away from the camera may indicate reading or distraction.",
-  },
-  {
-    icon: XCircle,
-    title: "Using a second device",
-    desc: "Switching to another screen or device during the interview is against the rules.",
-  },
-  {
-    icon: XCircle,
-    title: "Having someone assist you",
-    desc: "Another person speaking or feeding you answers invalidates the interview.",
-  },
-  {
-    icon: XCircle,
-    title: "Background noise & distractions",
-    desc: "A noisy or distracting environment affects audio quality and your focus.",
-  },
-  {
-    icon: XCircle,
-    title: "Muting for long periods",
-    desc: "Extended silence or muting during a question is treated as no response.",
-  },
-];
-
-export default function InformationPage() {
+function CandidateInfoContent() {
   const router = useRouter();
-  const [termsChecked, setTermsChecked] = useState(false);
-  const [disclosureChecked, setDisclosureChecked] = useState(false);
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get("sessionId") ?? "";
 
-  const canContinue = termsChecked && disclosureChecked;
+  // Resume state
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeUrl, setResumeUrl] = useState<string>("");
+  const [uploadingResume, setUploadingResume] = useState(false);
+
+  // GitHub project link state
+  const [githubUrl, setGithubUrl] = useState("");
+  const [githubError, setGithubError] = useState("");
+
+  // Educational details state
+  const [institution, setInstitution] = useState("");
+  const [degree, setDegree] = useState("");
+  const [department, setDepartment] = useState("");
+  const [gradYear, setGradYear] = useState("");
+
+  // Certifications state
+  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+  const [newCertName, setNewCertName] = useState("");
+  const [newCertIssuer, setNewCertIssuer] = useState("");
+  const [newCertYear, setNewCertYear] = useState("");
+  const [newCertUrl, setNewCertUrl] = useState("");
+
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    candidateApi
+      .profile()
+      .then((res) => {
+        const p = res.data;
+        if (p) {
+          if ((p as any).resume_url) setResumeUrl((p as any).resume_url);
+          if (p.githubUrl) setGithubUrl(p.githubUrl);
+          if (p.university) setInstitution(p.university);
+          if (p.degree) setDegree(p.degree);
+          if (p.department) setDepartment(p.department);
+          if (p.graduationYear) setGradYear(String(p.graduationYear));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProfile(false));
+  }, []);
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // File validation: PDF/DOC/DOCX
+    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!allowed.includes(file.type) && !["pdf", "doc", "docx"].includes(ext || "")) {
+      toast.error("Please upload a valid PDF or DOC/DOCX resume file.");
+      return;
+    }
+
+    // File size check: max 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Resume file size must be less than 10MB.");
+      return;
+    }
+
+    setResumeFile(file);
+    setUploadingResume(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await candidateApi.resume(fd);
+      const data = await res.json();
+      setResumeUrl(data.resume_url || `/uploads/resumes/${file.name}`);
+      toast.success("Resume uploaded successfully!");
+    } catch (err) {
+      console.error("Resume upload error:", err);
+      toast.error("Resume upload failed. Please try again.");
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const validateGithubUrl = (url: string) => {
+    if (!url.trim()) return "GitHub URL is required.";
+    const isGithub = /^https:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+/i.test(url.trim());
+    if (!isGithub) return "Please enter a valid GitHub repository URL (e.g. https://github.com/user/repo).";
+    return "";
+  };
+
+  const handleAddCert = () => {
+    if (!newCertName.trim()) {
+      toast.error("Certification name is required.");
+      return;
+    }
+    const item: CertificationItem = {
+      id: "cert_" + Date.now(),
+      name: newCertName.trim(),
+      issuer: newCertIssuer.trim() || "Independent Provider",
+      issueDate: newCertYear.trim() || new Date().getFullYear().toString(),
+      credentialUrl: newCertUrl.trim(),
+    };
+    setCertifications((prev) => [...prev, item]);
+    setNewCertName("");
+    setNewCertIssuer("");
+    setNewCertYear("");
+    setNewCertUrl("");
+    toast.success("Certification added!");
+  };
+
+  const handleRemoveCert = (id: string) => {
+    setCertifications((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const isFormValid =
+    (resumeUrl || resumeFile) &&
+    githubUrl.trim().length > 0 &&
+    !validateGithubUrl(githubUrl) &&
+    institution.trim().length > 0 &&
+    degree.trim().length > 0;
+
+  const handleSubmitInfo = async () => {
+    const err = validateGithubUrl(githubUrl);
+    if (err) {
+      setGithubError(err);
+      toast.error(err);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await candidateApi.updateProfile({
+        githubUrl: githubUrl.trim(),
+        university: institution.trim(),
+        degree: degree.trim(),
+        department: department.trim(),
+        graduationYear: gradYear ? parseInt(gradYear) : undefined,
+      });
+
+      toast.success("Personal information saved successfully!");
+      if (sessionId) {
+        router.push(`/interview/lobby?sessionId=${sessionId}`);
+      } else {
+        router.push(`/interview/lobby`);
+      }
+    } catch (err) {
+      console.error("Save candidate info error:", err);
+      toast.error("Failed to save information. Proceeding to System Check...");
+      router.push(`/interview/lobby?sessionId=${sessionId}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <span className="ml-2 text-sm text-slate-500">Loading Candidate Portal…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
-      {/* Top nav */}
+      {/* Header */}
       <header className="border-b border-slate-200/60 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center">
               <span className="text-white text-sm font-bold">E</span>
             </div>
-            <span className="text-lg font-semibold text-slate-800 tracking-tight">EchoSphere</span>
+            <span className="text-lg font-semibold text-slate-800 tracking-tight">EcoSphere</span>
           </div>
-          <div className="text-sm text-slate-400">Interview Info</div>
+          <div className="text-sm font-medium text-slate-400">Step 2: Candidate Information Portal</div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-10">
-        {/* Hero */}
-        <div className="text-center mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-xs font-semibold uppercase tracking-wider mb-4">
-            <Clock className="w-3.5 h-3.5" />
-            Approximately 20 minutes
-          </div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight leading-tight">
-            Welcome to your<br />
-            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
-              AI Interview
-            </span>
-          </h1>
-          <p className="mt-4 text-lg text-slate-500 max-w-lg mx-auto leading-relaxed">
-            You will be interviewed by multiple AI interviewers, each with their own persona and focus.
-            The questions adapt to your answers in real time.
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        {/* Title */}
+        <div>
+          <Badge className="bg-blue-100 text-blue-700 border-blue-200 mb-2">Mandatory Candidate Stage</Badge>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Personal Information Portal</h1>
+          <p className="text-slate-500 mt-1">
+            Provide your resume, project repo, education, and certifications to personalize your AI mock interviewer.
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-5 gap-8">
-          {/* Left column */}
-          <div className="lg:col-span-3 space-y-8">
-            {/* How the interview works */}
-            <section className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                  <MessageSquare className="w-4.5 h-4.5" />
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* A. Resume Upload */}
+          <Card className="border border-slate-200 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-5 w-5 text-blue-600" />
+                A. Candidate Resume
+              </CardTitle>
+              <CardDescription>Upload your latest resume (PDF or DOC/DOCX, max 10MB)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 hover:border-blue-300 transition-all text-center">
+                <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                  {uploadingResume ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
                 </div>
-                <h2 className="text-lg font-bold text-slate-800">How the Interview Works</h2>
-              </div>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                Every question goes through seven stages. The interview flows naturally — you just answer, and the AI handles the rest.
-              </p>
-
-              {/* Flow diagram */}
-              <div className="flex items-center gap-0 overflow-x-auto pb-2 -mx-2 px-2">
-                {FLOW_STEPS.map((step, i) => (
-                  <div key={step.label} className="flex items-center flex-shrink-0">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${step.color} transition-all hover:scale-110 cursor-default`}>
-                        <step.icon className="w-4.5 h-4.5" />
-                      </div>
-                      <span className="text-[11px] font-semibold text-slate-700 text-center whitespace-nowrap">
-                        {step.label}
-                      </span>
-                      <span className="text-[10px] text-slate-400 text-center hidden lg:block leading-tight max-w-[80px]">
-                        {step.desc}
-                      </span>
-                    </div>
-                    {i < FLOW_STEPS.length - 1 && (
-                      <div className="mx-1.5 mt-[-1.25rem] w-6 flex items-center justify-center">
-                        <ArrowRight className="w-4 h-4 text-slate-300" />
-                      </div>
-                    )}
+                {resumeUrl ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 justify-center">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Resume Attached
+                    </p>
+                    <p className="text-xs text-slate-500 truncate max-w-[200px] mx-auto">
+                      {resumeFile?.name || resumeUrl}
+                    </p>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Click to upload or drag resume file</p>
+                    <p className="text-xs text-slate-400 mt-1">PDF, DOC, DOCX up to 10MB</p>
+                  </div>
+                )}
 
-              {/* Mobile descriptions */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5 lg:hidden">
-                {FLOW_STEPS.map((step) => (
+                <Input
+                  id="resumeInput"
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleResumeUpload}
+                  className="hidden"
+                />
+                <Label
+                  htmlFor="resumeInput"
+                  className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 cursor-pointer shadow-sm"
+                >
+                  {resumeUrl ? "Replace Resume" : "Select Resume File"}
+                </Label>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* B. Best Project GitHub Link */}
+          <Card className="border border-slate-200 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileCode className="h-5 w-5 text-slate-800" />
+                B. Best Project GitHub Link
+              </CardTitle>
+              <CardDescription>Enter the GitHub repository URL of your top technical project</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="githubUrl" className="text-xs font-medium text-slate-700">
+                  GitHub Repository URL *
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="githubUrl"
+                    type="url"
+                    value={githubUrl}
+                    onChange={(e) => {
+                      setGithubUrl(e.target.value);
+                      setGithubError(validateGithubUrl(e.target.value));
+                    }}
+                    placeholder="https://github.com/username/best-project"
+                    className={`pl-9 ${githubError ? "border-rose-400 focus:ring-rose-200" : ""}`}
+                  />
+                  <FileCode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                </div>
+                {githubError ? (
+                  <p className="text-xs text-rose-500 font-medium">{githubError}</p>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    The interviewer will evaluate code structure and architecture from this project.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* C. Educational Details */}
+        <Card className="border border-slate-200 shadow-sm bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <GraduationCap className="h-5 w-5 text-violet-600" />
+              C. Educational Details
+            </CardTitle>
+            <CardDescription>Your academic background and degree information</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="inst">Institution / College / University *</Label>
+                <Input
+                  id="inst"
+                  value={institution}
+                  onChange={(e) => setInstitution(e.target.value)}
+                  placeholder="e.g. Stanford University"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="deg">Degree *</Label>
+                <Input
+                  id="deg"
+                  value={degree}
+                  onChange={(e) => setDegree(e.target.value)}
+                  placeholder="e.g. Bachelor of Science (B.S.)"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="dept">Department / Branch</Label>
+                <Input
+                  id="dept"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g. Computer Science & Engineering"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="year">Graduation Year</Label>
+                <Input
+                  id="year"
+                  type="number"
+                  value={gradYear}
+                  onChange={(e) => setGradYear(e.target.value)}
+                  placeholder="2025"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* D. Certifications */}
+        <Card className="border border-slate-200 shadow-sm bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Award className="h-5 w-5 text-amber-500" />
+              D. Certifications (Optional)
+            </CardTitle>
+            <CardDescription>Add relevant professional certifications and credentials</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Add cert inline form */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input
+                  placeholder="Certification Name (e.g. AWS Solutions Architect)"
+                  value={newCertName}
+                  onChange={(e) => setNewCertName(e.target.value)}
+                />
+                <Input
+                  placeholder="Issuing Organization (e.g. Amazon Web Services)"
+                  value={newCertIssuer}
+                  onChange={(e) => setNewCertIssuer(e.target.value)}
+                />
+                <Input
+                  placeholder="Year / Issue Date"
+                  value={newCertYear}
+                  onChange={(e) => setNewCertYear(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Credential URL (optional)"
+                  value={newCertUrl}
+                  onChange={(e) => setNewCertUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button variant="outline" onClick={handleAddCert} className="gap-1 text-slate-700">
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </div>
+            </div>
+
+            {/* Certifications list */}
+            {certifications.length > 0 && (
+              <div className="space-y-2">
+                {certifications.map((c) => (
                   <div
-                    key={step.label}
-                    className={`flex items-start gap-2 p-2.5 rounded-lg border ${step.color.split(" ")[2]}/30`}
+                    key={c.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white"
                   >
-                    <step.icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${step.color.split(" ")[1]}`} />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-700">{step.label}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{step.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Rules */}
-            <section className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-                  <Shield className="w-4.5 h-4.5" />
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">Interview Rules</h2>
-              </div>
-              <div className="space-y-3">
-                {[
-                  "Complete the interview in one sitting — you cannot pause and resume.",
-                  "Camera and microphone must be on and working throughout the session.",
-                  "You will be interviewed by AI interviewers, each with a distinct persona.",
-                  "Question difficulty adapts in real time based on your answers.",
-                  "You can interrupt the AI at any time to clarify or redirect the conversation.",
-                  "Your responses are analyzed for competency, communication, and behavioral signals.",
-                ].map((rule, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    </div>
-                    <p className="text-sm text-slate-600 leading-relaxed">{rule}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* The 4 personas */}
-            <section className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-                  <Users className="w-4.5 h-4.5" />
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">Your Interview Panel</h2>
-              </div>
-              <p className="text-sm text-slate-500 mb-5 leading-relaxed">
-                You will meet up to four different AI interviewers. Each brings a unique perspective to evaluate your fit.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {(
-                  [
-                    {
-                      key: "technical" as PersonaKey,
-                      title: "Technical Interviewer",
-                      desc: "Alex evaluates your coding, system design, and problem-solving ability. Expect algorithmic questions, architecture discussions, and live debugging.",
-                      color: "border-l-blue-500",
-                      bg: "bg-blue-50/40",
-                    },
-                    {
-                      key: "product" as PersonaKey,
-                      title: "Product Manager",
-                      desc: "Maya probes your product sense, prioritization, and user empathy. She'll ask about trade-offs, feature scoping, and how you think about users.",
-                      color: "border-l-purple-500",
-                      bg: "bg-purple-50/40",
-                    },
-                    {
-                      key: "hiring_manager" as PersonaKey,
-                      title: "Hiring Manager",
-                      desc: "Daniel assesses leadership, ownership, and team fit. He cares about how you handle ambiguity, drive results, and work with others.",
-                      color: "border-l-amber-500",
-                      bg: "bg-amber-50/40",
-                    },
-                    {
-                      key: "behavioral" as PersonaKey,
-                      title: "Behavioral Interviewer",
-                      desc: "Sophia explores your past experiences, communication style, and growth mindset through behavioral questions and situational prompts.",
-                      color: "border-l-emerald-500",
-                      bg: "bg-emerald-50/40",
-                    },
-                  ]
-                ).map((p) => (
-                  <div
-                    key={p.key}
-                    className={`rounded-xl border-l-4 ${p.color} ${p.bg} p-4 transition-all hover:shadow-md`}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                          p.key === "technical"
-                            ? "bg-blue-500"
-                            : p.key === "product"
-                            ? "bg-purple-500"
-                            : p.key === "hiring_manager"
-                            ? "bg-amber-500"
-                            : "bg-emerald-500"
-                        }`}
-                      >
-                        {p.key === "technical" ? "A" : p.key === "product" ? "M" : p.key === "hiring_manager" ? "D" : "S"}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold text-xs">
+                        <Award className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">{p.title}</p>
-                        <p className="text-[11px] text-slate-400">{PERSONAS[p.key].name}</p>
+                        <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {c.issuer} · {c.issueDate}
+                        </p>
                       </div>
                     </div>
-                    <p className="text-sm text-slate-600 leading-relaxed">{p.desc}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-slate-400 hover:text-rose-500 h-8 w-8"
+                      onClick={() => handleRemoveCert(c.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
-            </section>
-          </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Right column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Quick facts card */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">Quick Facts</h3>
-              <div className="space-y-3">
-                {[
-                  { icon: Clock, label: "Duration", value: "~20 minutes" },
-                  { icon: Video, label: "Camera", value: "Required" },
-                  { icon: Mic, label: "Microphone", value: "Required" },
-                  { icon: Brain, label: "Interviewers", value: "Up to 4 AI personas" },
-                  { icon: Monitor, label: "Questions", value: "Dynamic & adaptive" },
-                  { icon: Target, label: "Format", value: "Live conversational" },
-                ].map((fact) => (
-                  <div key={fact.label} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
-                      <fact.icon className="w-4 h-4 text-slate-300" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">{fact.label}</p>
-                      <p className="text-sm font-medium text-white">{fact.value}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Gating & Submit */}
+        <div className="flex flex-col items-end gap-3 pt-4">
+          <Button
+            size="lg"
+            className="w-full sm:w-auto px-8 bg-blue-600 hover:bg-blue-700 text-white shadow-md h-12 text-base gap-2"
+            onClick={handleSubmitInfo}
+            disabled={!isFormValid || submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Saving Candidate Info…
+              </>
+            ) : (
+              <>
+                Save &amp; Continue to System Check
+                <ArrowRight className="h-5 w-5" />
+              </>
+            )}
+          </Button>
 
-            {/* What to avoid */}
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500">
-                  <AlertTriangle className="w-4.5 h-4.5" />
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">What to Avoid</h2>
-              </div>
-              <div className="space-y-3">
-                {AVOID_ITEMS.map((item) => (
-                  <div key={item.title} className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <item.icon className="w-3.5 h-3.5 text-rose-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">{item.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* T&C + disclosure */}
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Before You Begin</h2>
-
-              <div className="space-y-4">
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <Checkbox
-                    checked={termsChecked}
-                    onCheckedChange={(c) => setTermsChecked(c as boolean)}
-                    className="mt-0.5 flex-shrink-0 ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
-                      I agree to the Terms & Conditions
-                    </span>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      By proceeding, you agree to EchoSphere's terms of service, privacy policy, and the interview rules outlined above.
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <Checkbox
-                    checked={disclosureChecked}
-                    onCheckedChange={(c) => setDisclosureChecked(c as boolean)}
-                    className="mt-0.5 flex-shrink-0 ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
-                      I understand this is an AI-powered interview
-                    </span>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      I acknowledge that my interview will be conducted by AI interviewers, recorded for analysis, and evaluated using automated scoring. I consent to this process.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <Button
-                size="lg"
-                className="w-full mt-6 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-lg shadow-blue-200/40 h-12 text-base"
-                onClick={() => router.push("/interview/lobby")}
-                disabled={!canContinue}
-              >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-
-              {!canContinue && (
-                <p className="text-center text-xs text-slate-400 mt-3">
-                  Please accept both checkboxes to continue.
-                </p>
-              )}
-            </div>
-          </div>
+          {!isFormValid && (
+            <p className="text-xs text-rose-500 flex items-center gap-1 font-medium">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Please attach a resume, valid GitHub repository link, institution, and degree to proceed.
+            </p>
+          )}
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CandidateInformationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+      </div>
+    }>
+      <CandidateInfoContent />
+    </Suspense>
   );
 }

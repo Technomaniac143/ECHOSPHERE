@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { api, setupApi, sessionApi } from "@/lib/api/client";
+import { setupApi, sessionApi } from "@/lib/api/client";
 import {
   POPULAR_COMPANIES,
   POPULAR_ROLES,
@@ -27,12 +27,14 @@ import {
   Target,
   Loader2,
   Star,
+  Award,
+  BarChart3,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -40,6 +42,176 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// ── Company Logo Representations ─────────────────────────────────────────────
+const COMPANY_LOGOS: Record<string, React.ReactNode> = {
+  Google: (
+    <svg className="w-5 h-5" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+    </svg>
+  ),
+  Microsoft: (
+    <svg className="w-5 h-5" viewBox="0 0 24 24">
+      <path fill="#F25022" d="M1 1h10v10H1z"/>
+      <path fill="#7FBA00" d="M13 1h10v10H13z"/>
+      <path fill="#00A4EF" d="M1 13h10v10H1z"/>
+      <path fill="#FFB900" d="M13 13h10v10H13z"/>
+    </svg>
+  ),
+  Amazon: (
+    <div className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center font-black text-xs">
+      a
+    </div>
+  ),
+  Meta: (
+    <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+      ∞
+    </div>
+  ),
+  Apple: (
+    <div className="w-5 h-5 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
+      
+    </div>
+  ),
+  Netflix: (
+    <div className="w-5 h-5 rounded-md bg-red-600 text-white flex items-center justify-center font-bold text-xs">
+      N
+    </div>
+  ),
+  Uber: (
+    <div className="w-5 h-5 rounded-md bg-black text-white flex items-center justify-center font-bold text-[10px]">
+      UBER
+    </div>
+  ),
+  Stripe: (
+    <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+      S
+    </div>
+  ),
+  Airbnb: (
+    <div className="w-5 h-5 rounded-md bg-rose-500 text-white flex items-center justify-center font-bold text-xs">
+      A
+    </div>
+  ),
+  Shopify: (
+    <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
+      S
+    </div>
+  ),
+  Salesforce: (
+    <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center font-bold text-xs">
+      sf
+    </div>
+  ),
+};
+
+function getCompanyIcon(name: string) {
+  if (COMPANY_LOGOS[name]) return COMPANY_LOGOS[name];
+  return (
+    <div className="w-5 h-5 rounded-md bg-violet-600 text-white flex items-center justify-center font-bold text-xs">
+      {name ? name.slice(0, 2).toUpperCase() : "CO"}
+    </div>
+  );
+}
+
+// ── Course Weightage Matrix ───────────────────────────────────────────────────
+interface CourseWeightage {
+  technical: number;
+  systemDesign: number;
+  problemSolving: number;
+  behavioral: number;
+  communication: number;
+  focusAreas: string[];
+  suggestedPersonas: PersonaKey[];
+}
+
+const DOMAIN_WEIGHTAGES: Record<string, CourseWeightage> = {
+  "Web Development": {
+    technical: 35,
+    systemDesign: 25,
+    problemSolving: 20,
+    behavioral: 10,
+    communication: 10,
+    focusAreas: ["Frontend Performance", "React Architecture", "REST/GraphQL APIs", "State Management"],
+    suggestedPersonas: ["technical", "domain", "behavioral"],
+  },
+  "Mobile Development": {
+    technical: 35,
+    systemDesign: 20,
+    problemSolving: 25,
+    behavioral: 10,
+    communication: 10,
+    focusAreas: ["iOS/Android Lifecycle", "Offline Synchronization", "Mobile Security", "UI Rendering"],
+    suggestedPersonas: ["technical", "domain"],
+  },
+  "Data Engineering": {
+    technical: 35,
+    systemDesign: 30,
+    problemSolving: 20,
+    behavioral: 10,
+    communication: 5,
+    focusAreas: ["Spark/Kafka Streaming", "Data Warehousing", "ETL Pipelines", "Data Quality & Schema Design"],
+    suggestedPersonas: ["technical", "domain", "hiring_manager"],
+  },
+  "Machine Learning / AI": {
+    technical: 40,
+    systemDesign: 25,
+    problemSolving: 20,
+    behavioral: 10,
+    communication: 5,
+    focusAreas: ["Model Inference & Fine-tuning", "LLM Evaluation", "Feature Engineering", "Scalable Serving"],
+    suggestedPersonas: ["technical", "domain"],
+  },
+  "DevOps / Infrastructure": {
+    technical: 30,
+    systemDesign: 40,
+    problemSolving: 15,
+    behavioral: 10,
+    communication: 5,
+    focusAreas: ["Kubernetes & Docker", "Terraform / IaC", "CI/CD Pipelines", "Observability & SRE"],
+    suggestedPersonas: ["technical", "hiring_manager"],
+  },
+  "Product Management": {
+    technical: 15,
+    systemDesign: 20,
+    problemSolving: 25,
+    behavioral: 20,
+    communication: 20,
+    focusAreas: ["Product Roadmap & Metrics", "Feature Prioritization", "User Empathy", "Stakeholder Management"],
+    suggestedPersonas: ["product", "behavioral", "hiring_manager"],
+  },
+  "Systems Design": {
+    technical: 25,
+    systemDesign: 45,
+    problemSolving: 15,
+    behavioral: 10,
+    communication: 5,
+    focusAreas: ["Scalability & Caching", "Microservices Architecture", "Database Partitioning", "Fault Tolerance"],
+    suggestedPersonas: ["technical", "leadership"],
+  },
+  "Security": {
+    technical: 40,
+    systemDesign: 30,
+    problemSolving: 15,
+    behavioral: 10,
+    communication: 5,
+    focusAreas: ["Application Security", "Threat Modeling", "Authentication & OAuth", "Vulnerability Analysis"],
+    suggestedPersonas: ["technical", "domain"],
+  },
+};
+
+const DEFAULT_WEIGHTAGE: CourseWeightage = {
+  technical: 30,
+  systemDesign: 25,
+  problemSolving: 20,
+  behavioral: 15,
+  communication: 10,
+  focusAreas: ["Core Algorithms", "System Architecture", "Code Quality", "Problem Solving"],
+  suggestedPersonas: ["technical", "behavioral"],
+};
 
 const STEP_LABELS = ["Company", "Role", "Domain", "AI Proposal", "Confirm"] as const;
 type StepIndex = 0 | 1 | 2 | 3 | 4;
@@ -55,7 +227,7 @@ interface SetupState {
   difficulty: DifficultyLevel;
   estimatedDuration: number;
   focusAreas: string[];
-  mode: "practice" | "assessment";
+  mode: "assessment"; // Unified Mock Interview Mode
 }
 
 const EMPTY_SETUP: SetupState = {
@@ -69,64 +241,33 @@ const EMPTY_SETUP: SetupState = {
   difficulty: "Medium",
   estimatedDuration: 20,
   focusAreas: [],
-  mode: "practice",
+  mode: "assessment",
 };
 
 export default function SetupPage() {
   const router = useRouter();
   const [step, setStep] = useState<StepIndex>(0);
   const [state, setState] = useState<SetupState>(EMPTY_SETUP);
-  const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const hasParsedRef = useRef(false);
+  const [weightage, setWeightage] = useState<CourseWeightage>(DEFAULT_WEIGHTAGE);
 
   useEffect(() => {
-    if (step === 3 && !hasParsedRef.current) {
-      hasParsedRef.current = true;
-      const effectiveCompany =
-        state.company && state.company !== "Other" ? state.company : state.customCompany;
-      const effectiveRole =
-        state.role && state.role !== "Other" ? state.role : state.customRole;
-      const effectiveDomain =
-        state.domain && state.domain !== "Other" ? state.domain : state.customDomain;
-
+    if (step === 3) {
       setParsing(true);
-      setupApi
-        .parse({
-          company: effectiveCompany,
-          role: effectiveRole,
-          domain: effectiveDomain,
-        })
-        .then((res: any) => {
-          const setup = res?.data || res;
-          setState((prev) => ({
-            ...prev,
-            suggestedPersonas: (setup?.suggestedPersonas || setup?.panel || ["technical", "behavioral"]) as PersonaKey[],
-            difficulty: (setup?.difficulty as DifficultyLevel) || "Medium",
-            estimatedDuration: setup?.estimatedDuration || setup?.est_duration_minutes || 20,
-            focusAreas: (setup?.focusAreas || setup?.focus_areas || ["Problem Solving", "Communication"]),
-          }));
-        })
-        .catch((err) => {
-          console.error("Setup parsing fallback:", err);
-          toast.error("Could not generate setup proposal. Using defaults.");
-          setState((prev) => ({
-            ...prev,
-            suggestedPersonas: ["technical", "behavioral"] as PersonaKey[],
-            difficulty: "Medium",
-            estimatedDuration: 20,
-            focusAreas: ["Problem Solving", "Communication"],
-          }));
-        })
-        .finally(() => {
-          setParsing(false);
-        });
-    } else if (step !== 3) {
-      hasParsedRef.current = false;
+      const chosenDomain = state.domain && state.domain !== "Other" ? state.domain : state.customDomain;
+      const derived = DOMAIN_WEIGHTAGES[chosenDomain] ?? DEFAULT_WEIGHTAGE;
+      setWeightage(derived);
+
+      setState((prev) => ({
+        ...prev,
+        suggestedPersonas: derived.suggestedPersonas,
+        focusAreas: derived.focusAreas,
+        estimatedDuration: 25,
+      }));
+      setParsing(false);
     }
-  }, [step, state.company, state.customCompany, state.role, state.customRole, state.domain, state.customDomain]);
+  }, [step, state.domain, state.customDomain]);
 
   const next = () => {
     if (step < 4) setStep((s) => (s + 1) as StepIndex);
@@ -161,16 +302,16 @@ export default function SetupPage() {
       const companyVal =
         state.company && state.company !== "Other"
           ? state.company
-          : state.customCompany || "Custom Company";
+          : state.customCompany || "Target Company";
       const roleVal =
-        state.role && state.role !== "Other" ? state.role : state.customRole || "Custom Role";
+        state.role && state.role !== "Other" ? state.role : state.customRole || "Software Engineer";
       const domainVal =
         state.domain && state.domain !== "Other"
           ? state.domain
-          : state.customDomain || "Custom Domain";
+          : state.customDomain || "Web Development";
 
       const session = await sessionApi.create({
-        mode: state.mode,
+        mode: "assessment",
         company: companyVal,
         role: roleVal,
         domain: domainVal,
@@ -184,28 +325,29 @@ export default function SetupPage() {
       const targetSessionId = sessionObj?.id || sessionObj?.session_id;
 
       toast.success("Interview session created");
+      // Route directly into Candidate Personal Information Portal
       if (targetSessionId) {
-        router.push(`/interview/lobby?sessionId=${targetSessionId}`);
+        router.push(`/interview/information?sessionId=${targetSessionId}`);
       } else {
-        router.push(`/interview/lobby`);
+        router.push(`/interview/information`);
       }
     } catch (err) {
-      toast.error("Failed to create session. Please try again.");
+      console.error("Session creation error:", err);
+      toast.error("Failed to create interview session. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-
   const personaColor: Record<PersonaKey, string> = {
-    technical: "bg-blue-500",
-    product: "bg-purple-500",
-    hiring_manager: "bg-amber-500",
-    behavioral: "bg-emerald-500",
-    customer: "bg-pink-500",
-    domain: "bg-teal-500",
-    leadership: "bg-indigo-500",
-    culture: "bg-rose-500",
+    technical: "bg-blue-600",
+    product: "bg-purple-600",
+    hiring_manager: "bg-amber-600",
+    behavioral: "bg-emerald-600",
+    customer: "bg-pink-600",
+    domain: "bg-teal-600",
+    leadership: "bg-indigo-600",
+    culture: "bg-rose-600",
   };
 
   const personaLabel: Record<PersonaKey, string> = {
@@ -235,10 +377,10 @@ export default function SetupPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center">
               <span className="text-white text-sm font-bold">E</span>
             </div>
-            <span className="text-lg font-semibold text-slate-800 tracking-tight">EchoSphere</span>
+            <span className="text-lg font-semibold text-slate-800 tracking-tight">EcoSphere</span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm text-slate-400">
-            Interview Setup
+          <div className="flex items-center gap-1.5 text-sm text-slate-400 font-medium">
+            Mock Interview Setup
           </div>
         </div>
       </header>
@@ -259,11 +401,7 @@ export default function SetupPage() {
                         : "bg-slate-200 text-slate-400"
                     }`}
                   >
-                    {i < step ? (
-                      <CheckCircle2 className="w-4 h-4" />
-                    ) : (
-                      i + 1
-                    )}
+                    {i < step ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
                   </div>
                   <span
                     className={`text-[11px] font-medium transition-colors ${
@@ -295,31 +433,31 @@ export default function SetupPage() {
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Which company?</h2>
+                  <h2 className="text-xl font-bold text-slate-800">Target Company</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Select the company you are interviewing with, or search for a custom one.
+                    Select a target company to customize interview questions to their hiring bar.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-5">
                 <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                    Select a company
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                    Select Company
                   </Label>
                   <Select
                     value={state.company}
                     onValueChange={(v) => handleCompanySelect(v ?? "")}
                   >
-                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-blue-400 focus:ring-blue-100">
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-blue-400 focus:ring-blue-100 h-12">
                       <SelectValue placeholder="Choose a company..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60">
                       {POPULAR_COMPANIES.map((c) => (
                         <SelectItem key={c} value={c}>
-                          <div className="flex items-center gap-2.5">
-                            <Building2 className="w-4 h-4 text-slate-400" />
-                            {c}
+                          <div className="flex items-center gap-3">
+                            {getCompanyIcon(c)}
+                            <span className="font-medium text-slate-800">{c}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -327,29 +465,19 @@ export default function SetupPage() {
                   </Select>
                 </div>
 
-                {state.company === "Other" && (
+                {state.company === "Other (describe below)" && (
                   <div className="animate-in fade-in duration-200">
                     <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                      Search for your company
+                      Custom Company Name
                     </Label>
-                    <div className="relative">
-                      <Input
-                        placeholder="Type your company name..."
-                        value={state.customCompany}
-                        onChange={(e) => updateField("customCompany", e.target.value)}
-                        className="w-full bg-slate-50 border-slate-200 focus:border-blue-400 focus:ring-blue-100 pl-10"
-                      />
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    </div>
+                    <Input
+                      placeholder="Type your target company..."
+                      value={state.customCompany}
+                      onChange={(e) => updateField("customCompany", e.target.value)}
+                      className="w-full bg-slate-50 border-slate-200 focus:border-blue-400 focus:ring-blue-100"
+                    />
                   </div>
                 )}
-
-                <div className="pt-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <InfoIcon />
-                    <span>The company helps us tailor interview questions to their specific hiring style.</span>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -362,31 +490,31 @@ export default function SetupPage() {
                   <Briefcase className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">What role?</h2>
+                  <h2 className="text-xl font-bold text-slate-800">Target Role</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Choose the position you are interviewing for, or type a custom role.
+                    Specify the role for tailored candidate evaluation.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-5">
                 <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                    Select a role
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                    Select Position
                   </Label>
                   <Select
                     value={state.role}
                     onValueChange={(v) => handleRoleSelect(v ?? "")}
                   >
-                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-violet-400 focus:ring-violet-100">
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-violet-400 focus:ring-violet-100 h-12">
                       <SelectValue placeholder="Choose a role..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60">
                       {POPULAR_ROLES.map((r) => (
                         <SelectItem key={r} value={r}>
                           <div className="flex items-center gap-2.5">
                             <Briefcase className="w-4 h-4 text-slate-400" />
-                            {r}
+                            <span className="font-medium text-slate-800">{r}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -394,29 +522,19 @@ export default function SetupPage() {
                   </Select>
                 </div>
 
-                {state.role === "Other" && (
+                {state.role === "Other (describe below)" && (
                   <div className="animate-in fade-in duration-200">
                     <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                      Type your role
+                      Custom Role
                     </Label>
-                    <div className="relative">
-                      <Input
-                        placeholder="e.g. ML Platform Engineer..."
-                        value={state.customRole}
-                        onChange={(e) => updateField("customRole", e.target.value)}
-                        className="w-full bg-slate-50 border-slate-200 focus:border-violet-400 focus:ring-violet-100 pl-10"
-                      />
-                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    </div>
+                    <Input
+                      placeholder="e.g. ML Platform Engineer..."
+                      value={state.customRole}
+                      onChange={(e) => updateField("customRole", e.target.value)}
+                      className="w-full bg-slate-50 border-slate-200 focus:border-violet-400 focus:ring-violet-100"
+                    />
                   </div>
                 )}
-
-                <div className="pt-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <InfoIcon />
-                    <span>We match interviewers and questions to the role's real-world expectations.</span>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -429,23 +547,23 @@ export default function SetupPage() {
                   <Brain className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Domain focus</h2>
+                  <h2 className="text-xl font-bold text-slate-800">Domain & Competency Focus</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Pick the primary technical or functional domain for this interview.
+                    Select your domain to calibrate course-specific weightage matrix.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-5">
                 <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                    Select a domain
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                    Course / Domain Focus
                   </Label>
                   <Select
                     value={state.domain}
                     onValueChange={(v) => handleDomainSelect(v as string)}
                   >
-                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-emerald-400 focus:ring-emerald-100">
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 focus:border-emerald-400 focus:ring-emerald-100 h-12">
                       <SelectValue placeholder="Choose a domain..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -453,7 +571,7 @@ export default function SetupPage() {
                         <SelectItem key={d} value={d}>
                           <div className="flex items-center gap-2.5">
                             <Brain className="w-4 h-4 text-slate-400" />
-                            {d}
+                            <span className="font-medium text-slate-800">{d}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -461,44 +579,37 @@ export default function SetupPage() {
                   </Select>
                 </div>
 
-                {state.domain === "Other" && (
+                {state.domain === "Other (describe below)" && (
                   <div className="animate-in fade-in duration-200">
                     <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
-                      Type your domain
+                      Custom Domain
                     </Label>
-                    <div className="relative">
-                      <Input
-                        placeholder="e.g. Distributed Systems..."
-                        value={state.customDomain}
-                        onChange={(e) => updateField("customDomain", e.target.value)}
-                        className="w-full bg-slate-50 border-slate-200 focus:border-emerald-400 focus:ring-emerald-100 pl-10"
-                      />
-                      <Brain className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    </div>
+                    <Input
+                      placeholder="e.g. Distributed Systems..."
+                      value={state.customDomain}
+                      onChange={(e) => updateField("customDomain", e.target.value)}
+                      className="w-full bg-slate-50 border-slate-200 focus:border-emerald-400 focus:ring-emerald-100"
+                    />
                   </div>
                 )}
-
-                <div className="pt-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <InfoIcon />
-                    <span>Domain selection helps us focus the conversation on relevant technical depth.</span>
-                  </div>
-                </div>
               </div>
             </div>
           )}
 
-          {/* STEP 4: AI Proposal */}
+          {/* STEP 4: AI Proposal (Course Weightage Driven) */}
           {step === 3 && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center gap-2.5 mb-7">
+              <div className="flex items-center gap-2.5 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">AI-generated setup</h2>
+                  <h2 className="text-xl font-bold text-slate-800">Dynamic AI Proposal</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    We analyzed your selections and prepared a tailored interview configuration.
+                    Proposal generated based on course weightage matrix for{" "}
+                    <span className="font-semibold text-slate-700">
+                      {state.domain && state.domain !== "Other (describe below)" ? state.domain : state.customDomain || "Web Development"}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -506,104 +617,99 @@ export default function SetupPage() {
               {parsing ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-4">
                   <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                  <p className="text-sm text-slate-500">Analyzing your profile and generating setup...</p>
+                  <p className="text-sm text-slate-500">Calculating course weightage and generating proposal...</p>
                 </div>
               ) : (
-                <div className="space-y-5">
-                  {/* Summary chip row */}
-                  <div className="flex flex-wrap gap-2.5">
-                    <Badge className="bg-slate-100 text-slate-700 border-slate-200 px-3 py-1.5 text-sm font-medium">
-                      {state.company && state.company !== "Other"
-                        ? state.company
-                        : state.customCompany || "Custom Company"}
-                    </Badge>
-                    <Badge className="bg-violet-50 text-violet-700 border-violet-200 px-3 py-1.5 text-sm font-medium">
-                      {state.role && state.role !== "Other" ? state.role : state.customRole || "Custom Role"}
-                    </Badge>
-                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1.5 text-sm font-medium">
-                      {state.domain && state.domain !== "Other" ? state.domain : state.customDomain || "Custom Domain"}
-                    </Badge>
-                    <Badge className={`px-3 py-1.5 text-sm font-medium border ${difficultyColor[state.difficulty]}`}>
-                      {state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1)}
-                    </Badge>
-                  </div>
+                <div className="space-y-6">
+                  {/* Weightage breakdown bar */}
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                        <BarChart3 className="w-4 h-4 text-violet-600" />
+                        Competency Weightage Breakdown
+                      </span>
+                      <span className="text-xs text-slate-400">Course Matrix</span>
+                    </div>
 
-                  {/* Personas */}
-                  <div>
-                    <Label className="text-sm font-medium text-slate-700 mb-2.5 block flex items-center gap-1.5">
-                      <Target className="w-4 h-4" />
-                      Inferred interviewers
-                    </Label>
-                    <div className="flex flex-wrap gap-2.5">
-                      {state.suggestedPersonas.length > 0 ? (
-                        state.suggestedPersonas.map((p) => (
-                          <Badge
-                            key={p}
-                            className={`px-3 py-1.5 text-sm font-medium text-white border-0 ${personaColor[p]} flex items-center gap-1.5`}
-                          >
-                            <Star className="w-3 h-3" />
-                            {personaLabel[p]}
-                          </Badge>
-                        ))
-                      ) : (
-                        <Badge className="bg-slate-100 text-slate-500 border-slate-200 px-3 py-1.5 text-sm">
-                          Technical + Behavioral (default)
-                        </Badge>
-                      )}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+                      <div className="p-2 bg-white rounded-lg border border-blue-200">
+                        <p className="font-bold text-blue-600">{weightage.technical}%</p>
+                        <p className="text-[10px] text-slate-500">Technical</p>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-purple-200">
+                        <p className="font-bold text-purple-600">{weightage.systemDesign}%</p>
+                        <p className="text-[10px] text-slate-500">System Design</p>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                        <p className="font-bold text-emerald-600">{weightage.problemSolving}%</p>
+                        <p className="text-[10px] text-slate-500">Problem Solving</p>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-amber-200">
+                        <p className="font-bold text-amber-600">{weightage.behavioral}%</p>
+                        <p className="text-[10px] text-slate-500">Behavioral</p>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-rose-200">
+                        <p className="font-bold text-rose-600">{weightage.communication}%</p>
+                        <p className="text-[10px] text-slate-500">Communication</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Focus areas */}
-                  <div>
-                    <Label className="text-sm font-medium text-slate-700 mb-2.5 block flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" />
-                      Focus areas
-                    </Label>
-                    {state.focusAreas.length > 0 ? (
+                  {/* Panel & Focus areas */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl border border-slate-200 bg-white">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center gap-1.5">
+                        <Target className="w-3.5 h-3.5 text-blue-600" />
+                        Inferred Interview Panel
+                      </p>
                       <div className="flex flex-wrap gap-2">
+                        {state.suggestedPersonas.map((p) => (
+                          <Badge
+                            key={p}
+                            className={`px-2.5 py-1 text-xs font-medium text-white ${personaColor[p]}`}
+                          >
+                            {personaLabel[p]}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-slate-200 bg-white">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                        Course Focus Areas
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
                         {state.focusAreas.map((area, i) => (
                           <span
                             key={i}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700"
+                            className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-700 font-medium"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                             {area}
                           </span>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-sm text-slate-400 italic">Focus areas will be inferred during the interview.</p>
-                    )}
-                  </div>
-
-                  {/* Duration */}
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                      <Clock className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Estimated duration</p>
-                      <p className="text-lg font-semibold text-slate-800">
-                        ~ {state.estimatedDuration} minutes
-                      </p>
                     </div>
                   </div>
 
-                  {/* Mode toggle */}
-                  <div className="pt-2">
-                    <Label className="text-sm font-medium text-slate-700 mb-2.5 block">Interview mode</Label>
-                    <div className="flex gap-2">
-                      {(["practice", "assessment"] as const).map((m) => (
+                  {/* Difficulty selector */}
+                  <div>
+                    <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                      Target Difficulty Level
+                    </Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {DIFFICULTY_LEVELS.map((d) => (
                         <button
-                          key={m}
-                          onClick={() => updateField("mode", m)}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                            state.mode === m
-                              ? "bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-200"
+                          key={d}
+                          type="button"
+                          onClick={() => updateField("difficulty", d)}
+                          className={`py-2 rounded-lg text-xs font-semibold border transition-all ${
+                            state.difficulty === d
+                              ? difficultyColor[d] + " ring-2 ring-blue-400"
                               : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                           }`}
                         >
-                          {m === "practice" ? "Practice" : "Assessment"}
+                          {d}
                         </button>
                       ))}
                     </div>
@@ -616,105 +722,59 @@ export default function SetupPage() {
           {/* STEP 5: Confirm */}
           {step === 4 && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center gap-2.5 mb-7">
+              <div className="flex items-center gap-2.5 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Review & confirm</h2>
+                  <h2 className="text-xl font-bold text-slate-800">Confirm Mock Interview Setup</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Check everything looks right, then start your interview.
+                    Ready to proceed to Candidate Personal Information.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Summary card */}
+              <div className="space-y-5">
                 <div className="border border-slate-200 rounded-xl bg-slate-50/50 p-5 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">Company</span>
-                    <span className="text-sm font-medium text-slate-800">
-                      {state.company && state.company !== "Other"
+                    <span className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                      {getCompanyIcon(state.company)}
+                      {state.company && state.company !== "Other (describe below)"
                         ? state.company
                         : state.customCompany || "Custom Company"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">Role</span>
-                    <span className="text-sm font-medium text-slate-800">
-                      {state.role && state.role !== "Other" ? state.role : state.customRole || "Custom Role"}
+                    <span className="text-sm font-semibold text-slate-800">
+                      {state.role && state.role !== "Other (describe below)"
+                        ? state.role
+                        : state.customRole || "Software Engineer"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">Domain</span>
-                    <span className="text-sm font-medium text-slate-800">
-                      {state.domain && state.domain !== "Other" ? state.domain : state.customDomain || "Custom Domain"}
+                    <span className="text-sm font-semibold text-slate-800">
+                      {state.domain && state.domain !== "Other (describe below)"
+                        ? state.domain
+                        : state.customDomain || "Web Development"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">Difficulty</span>
-                    <span className={`text-sm font-medium px-2.5 py-0.5 rounded-full border ${difficultyColor[state.difficulty]}`}>
-                      {state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1)}
+                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${difficultyColor[state.difficulty]}`}>
+                      {state.difficulty}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-500">Duration</span>
-                    <span className="text-sm font-medium text-slate-800">~{state.estimatedDuration} min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-500">Mode</span>
-                    <span className="text-sm font-medium text-slate-800 capitalize">{state.mode}</span>
+                    <span className="text-sm text-slate-500">Interview Mode</span>
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 font-semibold">
+                      Assessment / Mock Interview
+                    </Badge>
                   </div>
                 </div>
 
-                {/* Personas */}
-                <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Interviewers</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {state.suggestedPersonas.length > 0 ? (
-                      state.suggestedPersonas.map((p) => (
-                        <Badge
-                          key={p}
-                          className={`px-3 py-1.5 text-sm font-medium text-white ${personaColor[p]} flex items-center gap-1.5`}
-                        >
-                          <Star className="w-3 h-3" />
-                          {personaLabel[p]}
-                        </Badge>
-                      ))
-                    ) : (
-                      <Badge className="bg-slate-100 text-slate-600 border-slate-200 px-3 py-1.5 text-sm">
-                        Technical + Behavioral (default)
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {/* Edit buttons */}
-                <div className="flex flex-wrap gap-3 pt-1">
-                  <button
-                    onClick={() => setStep(0)}
-                    className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Edit company
-                  </button>
-                  <button
-                    onClick={() => setStep(1)}
-                    className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Edit role
-                  </button>
-                  <button
-                    onClick={() => setStep(2)}
-                    className="inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Edit domain
-                  </button>
-                </div>
-
-                {/* Confirm button */}
                 <Button
                   size="lg"
                   className="w-full bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-lg shadow-blue-200/50 h-12 text-base"
@@ -724,12 +784,12 @@ export default function SetupPage() {
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creating session...
+                      Initializing Candidate Session...
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Start Interview
+                      Proceed to Candidate Information
                     </>
                   )}
                 </Button>
@@ -763,13 +823,5 @@ export default function SetupPage() {
         </div>
       </main>
     </div>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
   );
 }

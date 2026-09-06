@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anam-ai/js-sdk": "^4.27.0",
     "@base-ui/react": "^1.8.0",
     "@clerk/nextjs": "^7.9.1",
     "@radix-ui/react-avatar": "^1.2.6",

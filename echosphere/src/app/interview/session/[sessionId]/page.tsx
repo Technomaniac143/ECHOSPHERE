@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useTranscript, useAgora, useInterview, useWhiteboard, useInterrupt, AGORA_DEV_MODE } from "@/hooks";
+import { useTranscript, useInterview, useWhiteboard, useInterrupt } from "@/hooks";
 import { sessionApi } from "@/lib/api/client";
-import { PERSONAS, type PersonaKey, type InterviewPhase } from "@/types";
+import { createClient, AnamEvent } from "@anam-ai/js-sdk";
+import { PERSONAS, type PersonaKey } from "@/types";
 import { AgoraVideo, AgoraStatusBar } from "@/components/agora/AgoraVideo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,49 +15,22 @@ import {
   MessageCircle,
   Mic,
   MicOff,
-  Volume2,
+  Video,
+  VideoOff,
+  PhoneOff,
   Send,
   Users,
-  RotateCcw,
-  SkipForward,
   Brain,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
   FileText,
-  Megaphone,
-  Headphones,
+  HeartPulse,
+  CheckCircle2,
+  X,
+  AudioWaveform,
+  CheckCircle,
+  MessageSquare,
+  ListTodo
 } from "lucide-react";
-import Link from "next/link";
 
-// ---------- Persona avatar SVG ----------
-function PersonaAvatar({ persona, size = "lg" }: { persona: PersonaKey; size?: "sm" | "md" | "lg" }) {
-  const meta = PERSONAS[persona];
-  const sizes = { sm: 36, md: 48, lg: 64 };
-  const s = sizes[size];
-  const initials = meta.name.charAt(0);
-
-  return (
-    <div
-      className="relative flex items-center justify-center rounded-full flex-shrink-0"
-      style={{ width: s, height: s, backgroundColor: meta.color, boxShadow: `0 0 0 3px ${meta.color}33, 0 4px 12px rgba(0,0,0,0.3)` }}
-    >
-      <span
-        className="text-white font-bold"
-        style={{ fontSize: s * 0.38 }}
-      >
-        {initials}
-      </span>
-      {/* Speaking ring */}
-      <div
-        className="absolute inset-0 rounded-full border-2 border-transparent animate-pulse"
-        style={{ borderColor: `${meta.color}80` }}
-      />
-    </div>
-  );
-}
-
-// ---------- Transcript bubble ----------
 function TranscriptBubble({
   speaker,
   text,
@@ -72,98 +46,49 @@ function TranscriptBubble({
   const meta = persona ? PERSONAS[persona] : null;
 
   return (
-    <div
-      className={`flex ${isAgent ? "justify-start" : "justify-end"} mb-2.5 last:mb-0`}
-    >
-      <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-          isAgent
-            ? "bg-slate-800 text-slate-100 rounded-tl-sm border border-slate-700/50"
-            : "bg-blue-600 text-white rounded-tr-sm shadow-lg shadow-blue-600/20"
-        } ${isLatest ? "ring-2 ring-blue-500/30" : ""}`}
-      >
-        {isAgent && meta && (
-          <div className="flex items-center gap-2 mb-1">
-            <PersonaAvatar persona={persona || "technical"} size="sm" />
-            <span
-              className="text-[11px] font-semibold"
-              style={{ color: meta.color }}
-            >
-              {meta.label}
-            </span>
+    <div className={`flex flex-col mb-4 ${isAgent ? "items-start" : "items-end"}`}>
+      {isAgent && (
+        <div className="flex items-center gap-2 mb-1 pl-1">
+          <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
+            <span className="text-blue-600 text-[10px] font-bold">{meta?.name?.charAt(0) || "A"}</span>
           </div>
-        )}
+          <span className="text-[11px] font-semibold text-slate-700">
+            {meta?.name || "AI Agent"}
+          </span>
+          <span className="text-[10px] text-slate-400 ml-1">
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
+      {!isAgent && (
+        <div className="flex items-center gap-2 mb-1 pr-1">
+          <span className="text-[11px] font-semibold text-slate-700">You</span>
+          <span className="text-[10px] text-slate-400 ml-1">
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
+      <div
+        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+          isAgent
+            ? "bg-slate-50 text-slate-700 rounded-tl-sm border border-slate-200/60 shadow-sm"
+            : "bg-green-50 text-green-900 rounded-tr-sm border border-green-100 shadow-sm"
+        }`}
+      >
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
       </div>
     </div>
   );
 }
 
-// ---------- Persona handoff banner ----------
-function PersonaHandoffBanner({
-  currentPersona,
-  previousPersona,
-  onDismiss,
-}: {
-  currentPersona: PersonaKey;
-  previousPersona?: PersonaKey;
-  onDismiss: () => void;
-}) {
-  const meta = PERSONAS[currentPersona];
-
-  return (
-    <div
-      className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-500"
-      style={{ marginTop: "-5rem" }}
-    >
-      <div
-        className="bg-slate-900/95 backdrop-blur-xl rounded-2xl px-5 py-3 shadow-2xl border border-white/10 flex items-center gap-3 min-w-[300px]"
-        onClick={onDismiss}
-      >
-        <RotateCcw className="w-4 h-4 text-blue-400 flex-shrink-0" />
-        <div className="flex items-center gap-2.5">
-          <PersonaAvatar persona={currentPersona} size="sm" />
-          <div>
-            <p className="text-xs text-slate-400">Now interviewing with</p>
-            <p className="text-sm font-semibold text-white flex items-center gap-2">
-              {meta.name}
-              <span style={{ color: meta.color }} className="text-[11px] font-medium">
-                {meta.label}
-              </span>
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className="ml-auto text-slate-500 hover:text-slate-300 transition-colors"
-        >
-          <ChevronDown className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ---------- Main session page ----------
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
   const sessionId = params.sessionId as string;
 
-  const { turns, listening, speaking, thinking, push, markSpeaking, markThinking } = useTranscript();
-  const {
-    connected,
-    quality,
-    muteState,
-    devMode,
-    loading,
-    initialize,
-    requestDevices,
-    muteAudio,
-    muteVideo,
-    join,
-    leave,
-  } = useAgora(true);
+  const { turns, listening, speaking, thinking, replaceAll, clearTurns, markSpeaking, markThinking } = useTranscript();
+  const transcriptListRef = useRef<HTMLDivElement>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   const {
     phase,
@@ -182,83 +107,131 @@ export default function SessionPage() {
   });
 
   const { state: whiteboard, persona: currentPersona, refresh: refreshWhiteboard } = useWhiteboard(sessionId);
-  const { suppressAi, raise: raiseInterrupt, release: releaseInterrupt } = useInterrupt({
-    onInterrupt: () => {
-      // Signal to backend that candidate interrupted
-    },
-  });
+  const { suppressAi, raise: raiseInterrupt, release: releaseInterrupt } = useInterrupt();
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [showTranscript, setShowTranscript] = useState(true);
-  const [showHandoff, setShowHandoff] = useState(false);
-  const [currentQuestion, setCurrentQuestion] = useState("Hi there! I'm Alex, your technical interviewer. Let's start with a warm-up — tell me about a technical project you're most proud of and why.");
-  const [questionIndex, setQuestionIndex] = useState(0);
   const [candidateName, setCandidateName] = useState("Candidate");
+  const [targetRole, setTargetRole] = useState("Software Engineer");
+  const [activeTab, setActiveTab] = useState<"conversation" | "notes">("conversation");
   const sessionInitDone = useRef(false);
   const mediaInitDone = useRef(false);
+  const anamClientRef = useRef<any>(null);
+  const [anamStatus, setAnamStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [audioMuted, setAudioMuted] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
 
+  // Auto-scroll transcript list on new turns
+  useEffect(() => {
+    const list = transcriptListRef.current;
+    if (list) {
+      list.scrollTop = list.scrollHeight;
+      return;
+    }
+    transcriptEndRef.current?.scrollIntoView({ block: "end" });
+  }, [turns]);
 
-  // Mock questions for each persona
-  const QUESTIONS: Record<PersonaKey, string[]> = {
-    technical: [
-      "Let's start with a warm-up — tell me about a technical project you're most proud of and why.",
-      "Imagine you need to design a URL shortening service like bit.ly. Walk me through your approach.",
-      "You mentioned using Redis earlier. How would you handle cache invalidation in a high-traffic system?",
-      "Here's a coding problem: given an array of integers, find the longest subarray with sum equal to zero. How would you approach this?",
-    ],
-    product: [
-      "Thanks for joining me. I'd like to start by understanding how you prioritize features when everything seems urgent.",
-      "Imagine you're building a new feature for a social media app. How do you decide what to build first?",
-      "You mentioned user research. Can you walk me through a time when user feedback changed your product direction?",
-      "Let's talk about trade-offs. When would you choose a slower but simpler solution over a complex one?",
-    ],
-    hiring_manager: [
-      "Hi, I'm Daniel. Let's talk about your career — what drives you to take on new challenges?",
-      "Tell me about a time you had to lead a project without formal authority. How did you get buy-in?",
-      "You've worked in multiple team sizes. What do you find most challenging about transitioning between them?",
-      "If you joined our team and noticed a process that wasn't working, what would you do?",
-    ],
-    behavioral: [
-      "Hi, I'm Sophia. Let's dive into your experiences. Tell me about a time you failed at something important.",
-      "Describe a situation where you had to work with a difficult team member. How did you handle it?",
-      "Tell me about a time you had to learn something new under pressure. What was your approach?",
-      "Give me an example of when you went above and beyond for a project or team.",
-    ],
-    customer: [
-      "Hey there! I'm Jordan, and I'm playing the role of a frustrated customer. I've been waiting for my order for two weeks and nobody has updated me. What do you say?",
-      "I just tried to use your app and it crashed three times. I'm really annoyed. How do you handle this?",
-      "I want to cancel my subscription but your cancellation process is incredibly complicated. What do you do?",
-      "I found a bug that caused me to lose data. I'm not happy. How do you respond?",
-    ],
-    domain: [
-      "Let's dive into your domain expertise. Walk me through a complex scenario you solved in your field.",
-    ],
-    leadership: [
-      "Describe a time you had to make a technical decision with incomplete information.",
-    ],
-    culture: [
-      "What kind of team environment helps you produce your best work?",
-    ],
-  };
-
-  // Initialize — guarded with ref to prevent re-runs from unstable useCallback refs
+  // Initialize
   useEffect(() => {
     if (sessionInitDone.current) return;
     sessionInitDone.current = true;
     const init = async () => {
-      await initialize();
-      await requestDevices();
       try {
-        await sessionApi.get(sessionId);
-      } catch {}
+        const sessionRes = await sessionApi.get(sessionId).catch(() => null) as {
+          data?: { targetRole?: string; role?: string };
+          target_role?: string;
+        } | null;
+        const role = sessionRes?.data?.targetRole || sessionRes?.data?.role || sessionRes?.target_role;
+        if (role) setTargetRole(role);
+
+        // Anam owns the microphone. Do not initialize Agora RTC here — it would steal the mic.
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/sessions/${sessionId}/anam-token`, {
+          method: "POST",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const token = data.sessionToken || data.token;
+          if (token) {
+            const anamClient = createClient(token);
+            anamClientRef.current = anamClient;
+
+            try {
+              anamClient.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED, (messages: any[]) => {
+                if (!messages || !Array.isArray(messages)) return;
+                const mapped = messages
+                  .filter((msg) => msg?.content && String(msg.content).trim())
+                  .map((msg, index) => {
+                    const isUser = msg.role === "user";
+                    return {
+                      id: String(msg.id || `anam-${index}`),
+                      speaker: (isUser ? "candidate" : "agent") as "candidate" | "agent",
+                      persona: isUser ? null : (currentPersona || "technical"),
+                      text: String(msg.content).trim(),
+                      tsStart: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    };
+                  });
+                replaceAll(mapped);
+                const last = mapped[mapped.length - 1];
+                if (last?.speaker === "agent") {
+                  markSpeaking("agent", true);
+                  setTimeout(() => markSpeaking("agent", false), 2500);
+                }
+              });
+
+              anamClient.addListener(AnamEvent.USER_SPEECH_STARTED, () => {
+                markSpeaking("candidate", true);
+              });
+
+              anamClient.addListener(AnamEvent.USER_SPEECH_ENDED, () => {
+                markSpeaking("candidate", false);
+              });
+            } catch (err) {
+              console.warn("Anam event listener setup notice:", err);
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            const videoEl = document.getElementById("anam-video-element") as HTMLVideoElement | null;
+            if (videoEl) {
+              videoEl.muted = true;
+              videoEl.playsInline = true;
+              videoEl.autoplay = true;
+            }
+            await anamClient.streamToVideoElement("anam-video-element");
+            if (videoEl) {
+              try {
+                await videoEl.play();
+              } catch {
+                // Autoplay with sound can be blocked; keep the stream muted until the user taps mic.
+              }
+              videoEl.muted = false;
+            }
+            setAnamStatus("connected");
+          } else {
+            setAnamStatus("error");
+          }
+        } else {
+          console.error("Anam token request failed:", response.status, await response.text());
+          setAnamStatus("error");
+        }
+      } catch (e: any) {
+        console.error("Failed to init session or Anam:", e?.cause || e?.message || e);
+        setAnamStatus("error");
+      }
       startTimer(durationMinutes);
-      setPhaseState("calibration");
+      setPhaseState("session");
     };
     init();
+
+    // Cleanup: stop Anam streaming when component unmounts
+    return () => {
+      if (anamClientRef.current) {
+        try { anamClientRef.current.stopStreaming(); } catch {}
+        anamClientRef.current = null;
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // Request camera/mic for the session — runs once on mount
+  // PIP webcam is video-only so Anam keeps exclusive access to the microphone.
   useEffect(() => {
     if (mediaInitDone.current) return;
     mediaInitDone.current = true;
@@ -266,7 +239,7 @@ export default function SessionPage() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
-          audio: { echoCancellation: true, noiseSuppression: true },
+          audio: false,
         });
         setLocalStream(stream);
       } catch {}
@@ -275,57 +248,7 @@ export default function SessionPage() {
     return () => {
       setLocalStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Advance to next question / persona
-  const advanceQuestion = useCallback(() => {
-    const personaQ = QUESTIONS[currentPersona];
-    if (!personaQ) return;
-    const nextIdx = (questionIndex + 1) % personaQ.length;
-    if (nextIdx === 0) {
-      // Rotate to next persona
-      const personas: PersonaKey[] = ["technical", "product", "hiring_manager", "behavioral"];
-      const currIdx = personas.indexOf(currentPersona);
-      const nextPersona = personas[(currIdx + 1) % personas.length];
-      setCurrentQuestion(QUESTIONS[nextPersona][0]);
-      setQuestionIndex(0);
-      setShowHandoff(true);
-      setTimeout(() => setShowHandoff(false), 4000);
-      // Push handoff turn
-      push({
-        id: `${Date.now()}-handoff`,
-        speaker: "agent",
-        persona: nextPersona,
-        text: `${PERSONAS[nextPersona].name}: Hi again! I'm ${PERSONAS[nextPersona].name}, your ${PERSONAS[nextPersona].label.toLowerCase()}. Let's continue.`,
-        tsStart: new Date().toISOString(),
-      });
-    } else {
-      setCurrentQuestion(personaQ[nextIdx]);
-      setQuestionIndex(nextIdx);
-    }
-  }, [currentPersona, questionIndex, push]);
-
-  // Auto-advance after a delay (simulate AI listening then next question)
-  useEffect(() => {
-    if (turns.length > 0 && turns[turns.length - 1].speaker === "candidate") {
-      const t = setTimeout(() => {
-        markSpeaking("agent", true);
-        setTimeout(() => {
-          markSpeaking("agent", false);
-          push({
-            id: `${Date.now()}`,
-            speaker: "agent",
-            persona: currentPersona,
-            text: currentQuestion,
-            tsStart: new Date().toISOString(),
-          });
-          setQuestionIndex((q) => q); // keep current question index
-        }, 2000);
-      }, 3000);
-      return () => clearTimeout(t);
-    }
-  }, [turns.length, push, markSpeaking, currentPersona, currentQuestion]);
 
   const handleEndSession = async () => {
     try {
@@ -336,371 +259,313 @@ export default function SessionPage() {
     }
   };
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const currentPersonaMeta = PERSONAS[currentPersona];
+  const steps = [
+    { id: 1, label: "Verify", status: "completed" },
+    { id: 2, label: "Technical", status: "current" },
+    { id: 3, label: "Product", status: "upcoming" },
+    { id: 4, label: "Behavioral", status: "upcoming" },
+    { id: 5, label: "Confirm", status: "upcoming" },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white overflow-hidden">
-      {/* Persona handoff banner */}
-      {showHandoff && (
-        <PersonaHandoffBanner
-          currentPersona={currentPersona}
-          previousPersona={currentPersona}
-          onDismiss={() => setShowHandoff(false)}
-        />
-      )}
-
-      {/* Top bar */}
-      <header className="h-14 border-b border-white/5 bg-slate-900/90 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-20">
+    <div className="h-screen bg-slate-100 text-slate-800 font-sans flex flex-col overflow-hidden">
+      
+      {/* Top Navigation Bar */}
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">E</span>
-            </div>
-            <span className="text-sm font-semibold text-white hidden sm:block">EchoSphere</span>
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
+            <Brain className="w-5 h-5 text-white" />
           </div>
-          <div className="h-5 w-px bg-white/10 mx-1" />
-          <span className="text-xs text-slate-400 hidden sm:block">
-            {currentPersonaMeta.label}
-          </span>
+          <span className="text-lg font-bold text-slate-800">EchoSphere</span>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Timer */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-mono font-bold bg-slate-800/80 border ${
-              remainingSeconds <= 60 ? "border-rose-500/40 text-rose-400" : "border-slate-700/50 text-slate-200"
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            {formatTime(remainingSeconds)}
-          </div>
-
-          {/* Transcript toggle */}
-          <button
-            onClick={() => setShowTranscript(!showTranscript)}
-            className={`p-1.5 rounded-lg transition-all ${
-              showTranscript ? "bg-blue-500/20 text-blue-400" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-            }`}
-            title="Toggle transcript"
-          >
-            <MessageCircle className="w-4 h-4" />
-          </button>
-
-          {/* End session */}
-          {status === "in_progress" && (
-            <button
-              onClick={handleEndSession}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-              title="End session"
-            >
-              <ChevronLeft className="w-4 h-4 rotate-180" />
-            </button>
-          )}
-
-          {devMode && (
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
-              Dev
-            </span>
-          )}
-        </div>
-      </header>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Left: AI Interviewer section */}
-        <div className="flex-1 flex flex-col min-h-0 lg:max-w-[45%]">
-          {/* Interviewer card */}
-          <div className="flex-1 flex flex-col p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <PersonaAvatar persona={currentPersona} size="md" />
-                <div>
-                  <h2 className="text-base font-bold text-white">{currentPersonaMeta.name}</h2>
-                  <p
-                    className="text-xs font-medium"
-                    style={{ color: currentPersonaMeta.color }}
-                  >
-                    {currentPersonaMeta.label}
-                  </p>
+        {/* Step Progress Bar */}
+        <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center">
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
+                    ${step.status === "completed" ? "bg-emerald-500 text-white" 
+                    : step.status === "current" ? "bg-blue-600 text-white ring-4 ring-blue-100" 
+                    : "bg-slate-100 text-slate-400"}`}
+                >
+                  {step.status === "completed" ? <CheckCircle2 className="w-4 h-4" /> : step.id}
                 </div>
-              </div>
-              <Badge
-                variant="outline"
-                className="border-slate-700 text-slate-300 text-[10px] px-2 py-0.5"
-              >
-                Persona {["technical", "product", "hiring_manager", "behavioral"].indexOf(currentPersona) + 1} of 4
-              </Badge>
-            </div>
-
-            {/* Question display */}
-            <div className="flex-1 bg-slate-900/50 border border-slate-800/60 rounded-2xl p-5 overflow-y-auto">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                  Speaking
+                <span className={`text-[10px] mt-1 font-medium ${step.status === "upcoming" ? "text-slate-400" : "text-slate-700"}`}>
+                  {step.label}
                 </span>
               </div>
+              {index < steps.length - 1 && (
+                <div className={`w-8 lg:w-12 h-[2px] mx-2 -mt-4 ${step.status === "completed" ? "bg-emerald-500" : "bg-slate-200"}`} />
+              )}
+            </div>
+          ))}
+        </div>
 
-              {/* Current question */}
-              <div className="mb-4">
-                <div
-                  className={`text-lg leading-relaxed transition-opacity ${
-                    thinking ? "text-slate-400 italic" : "text-white"
-                  }`}
-                >
-                  {thinking ? (
-                    <span className="animate-pulse">Analyzing your response...</span>
-                  ) : (
-                    currentQuestion
-                  )}
+        <button
+          onClick={handleEndSession}
+          className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
+          title="End Interview"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </header>
+
+      {/* Main Content Area - 3 Column Layout */}
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4 lg:p-6 overflow-hidden">
+        
+        {/* Left Column: Candidate Profile (20%) */}
+        <div className="hidden lg:flex flex-col w-[250px] gap-4 flex-shrink-0">
+          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/60">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg">
+                  {candidateName.charAt(0)}
                 </div>
-              </div>
-
-              {/* Speaking / listening indicators */}
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  {speaking ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                      <span className="text-blue-300">Interviewer speaking</span>
-                    </>
-                  ) : listening ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-emerald-300">Listening to you</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-slate-600" />
-                      <span className="text-slate-500">Awaiting response</span>
-                    </>
-                  )}
+                <div>
+                  <h3 className="font-bold text-slate-800 leading-tight">{candidateName}</h3>
+                  <div className="flex items-center gap-1 mt-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full w-max">
+                    <CheckCircle className="w-3 h-3" />
+                    <span className="text-[10px] font-semibold">Verified</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Question controls */}
-            <div className="flex items-center gap-2 mt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
-                onClick={advanceQuestion}
-              >
-                <SkipForward className="w-3 h-3 mr-1" />
-                Next question
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-500 hover:text-slate-300 text-xs"
-                onClick={refreshWhiteboard}
-              >
-                <RotateCcw className="w-3 h-3 mr-1" />
-                Refresh
-              </Button>
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                   <Clock className="w-3 h-3" /> ROLE
+                </p>
+                <p className="text-sm font-semibold text-slate-700">{targetRole}</p>
+              </div>
+              <div className="h-px bg-slate-100" />
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                   LAST INTERVIEW
+                </p>
+                <p className="text-sm font-semibold text-slate-700">14 Mar 2026</p>
+              </div>
+              <div className="h-px bg-slate-100" />
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                   TOTAL SESSIONS
+                </p>
+                <p className="text-sm font-semibold text-slate-700">5 completed</p>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Live transcript (collapsible) */}
-          {showTranscript && (
-            <div className="border-t border-white/5 bg-slate-900/80 backdrop-blur-sm max-h-[260px] overflow-y-auto">
-              <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm px-4 lg:px-6 py-2.5 flex items-center justify-between border-b border-white/5">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs font-medium text-slate-400">Live Transcript</span>
-                  <Badge variant="outline" className="border-slate-700 text-slate-500 text-[10px] px-1.5 py-0">
-                    {turns.length} turns
-                  </Badge>
-                </div>
-                <button
-                  onClick={() => setShowTranscript(false)}
-                  className="text-slate-500 hover:text-slate-300"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-4 lg:p-6 space-y-1">
-                {turns.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">
-                    Transcript will appear here as the interview progresses.
-                  </p>
+        {/* Center Column: Video Stage (50%) */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-white rounded-3xl shadow-sm border border-slate-200/60 overflow-hidden relative">
+          
+          {/* Main AI Video Container */}
+          <div className="flex-1 min-h-0 bg-slate-950 relative overflow-hidden">
+            
+            {/* Anam Video Stream Element — contain so portrait/landscape streams are not cropped */}
+            <video
+              id="anam-video-element"
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 z-0 h-full w-full object-contain object-center bg-slate-950"
+            />
+            
+            {/* Fallback Placeholder (shows if video is not yet streaming) */}
+            <div className={`absolute inset-0 z-[1] flex items-center justify-center transition-opacity duration-700 pointer-events-none ${anamStatus === "connected" ? "opacity-0" : "opacity-100"}`}>
+              <div className="text-center">
+                {anamStatus === "error" ? (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-3">
+                      <X className="w-8 h-8 text-rose-400" />
+                    </div>
+                    <p className="text-slate-500 font-medium text-sm">Could not connect AI Agent</p>
+                    <p className="text-slate-400 text-xs mt-1">Check your network and try again</p>
+                  </>
                 ) : (
-                  turns.map((turn) => (
-                    <TranscriptBubble
-                      key={turn.id}
-                      speaker={turn.speaker}
-                      text={turn.text}
-                      persona={turn.persona ?? null}
-                      isLatest={turn.id === turns[turns.length - 1]?.id}
-                    />
-                  ))
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-3 animate-pulse">
+                      <Brain className="w-8 h-8 text-blue-300" />
+                    </div>
+                    <p className="text-slate-500 font-medium text-sm">Connecting to EchoSphere AI...</p>
+                    <p className="text-slate-400 text-xs mt-1">Setting up your AI interviewer</p>
+                  </>
                 )}
               </div>
             </div>
-          )}
+
+            {/* AI Name Badge */}
+            <div className="absolute top-5 left-5 z-10 bg-slate-800/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-semibold">EchoSphere AI • LIVE</span>
+            </div>
+
+            {/* Picture in Picture (Candidate Webcam) */}
+            <div className="absolute top-5 right-5 z-10 w-40 h-52 bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-4 border-white/10">
+              {localStream && !videoMuted ? (
+                <AgoraVideo
+                  stream={localStream}
+                  mirror={true}
+                  aspect="4:3"
+                  className="w-full h-full object-cover"
+                  showLabel={false}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                  <VideoOff className="w-8 h-8 text-slate-500" />
+                </div>
+              )}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-900/60 backdrop-blur-md px-2 py-0.5 rounded-full flex items-center gap-1.5 whitespace-nowrap">
+                <span className="text-[10px] text-white font-medium">You</span>
+                {audioMuted && <MicOff className="w-3 h-3 text-rose-400" />}
+              </div>
+            </div>
+
+            {/* Floating Call Controls */}
+            <div className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 flex items-center gap-3 bg-white/10 backdrop-blur-xl p-2 rounded-full border border-white/20 shadow-2xl">
+              <button
+                onClick={() => {
+                   const nextMuted = !audioMuted;
+                   setAudioMuted(nextMuted);
+                   const anam = anamClientRef.current;
+                   if (anam) {
+                     try {
+                       anam.muteInputAudio?.(nextMuted);
+                       anam.setInputAudioEnabled?.(!nextMuted);
+                     } catch {}
+                   }
+                }}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                  audioMuted ? "bg-white text-slate-700 shadow-md" : "bg-slate-700/80 text-white hover:bg-slate-600"
+                }`}
+              >
+                {audioMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={() => {
+                   const nextMuted = !videoMuted;
+                   setVideoMuted(nextMuted);
+                   if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = !nextMuted);
+                }}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                  videoMuted ? "bg-white text-slate-700 shadow-md" : "bg-slate-700/80 text-white hover:bg-slate-600"
+                }`}
+              >
+                {videoMuted ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={handleEndSession}
+                className="w-12 h-12 rounded-full bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 shadow-lg shadow-rose-500/20"
+              >
+                <PhoneOff className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Status Bar */}
+          <div className="h-14 bg-white border-t border-slate-100 flex items-center justify-center gap-3">
+             <span className="text-sm font-bold text-blue-900">EchoSphere AI is listening...</span>
+             <AudioWaveform className="w-5 h-5 text-blue-600 animate-pulse" />
+          </div>
         </div>
 
-        {/* Right: Candidate video + controls */}
-        <div className="w-full lg:w-[55%] flex flex-col bg-slate-900/30 p-3 lg:p-4">
-          {/* Video section */}
-          <div className="flex-1 relative rounded-2xl overflow-hidden bg-slate-900 border border-white/5">
-            {localStream && !muteState.videoMuted ? (
-              <AgoraVideo
-                stream={localStream}
-                mirror={true}
-                aspect="16:9"
-                className="w-full h-full object-cover"
-                showLabel={true}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-slate-900/80">
-                <div className="text-center">
-                  <div className="w-20 h-20 mx-auto rounded-full bg-slate-800 flex items-center justify-center mb-3">
-                    <Headphones className="w-10 h-10 text-slate-600" />
+        {/* Right Column: Workspaces (30%) */}
+        <div className="hidden lg:flex flex-col w-[350px] gap-4 flex-shrink-0 min-h-0">
+          
+          {/* Top Half: Conversation & Notes */}
+          <div className="flex-1 min-h-0 bg-white rounded-3xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
+            <div className="flex items-center border-b border-slate-100">
+              <button
+                onClick={() => setActiveTab("conversation")}
+                className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-bold border-b-2 transition-all ${
+                  activeTab === "conversation" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Conversation
+              </button>
+              <button
+                onClick={() => setActiveTab("notes")}
+                className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-bold border-b-2 transition-all ${
+                  activeTab === "notes" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Notes
+              </button>
+            </div>
+            
+            {activeTab === "conversation" && (
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="px-5 py-3 flex items-center justify-between border-b border-slate-50 flex-shrink-0">
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold">Live Transcription</span>
                   </div>
-                  <p className="text-sm text-slate-400">Camera off</p>
-                  <p className="text-xs text-slate-600 mt-1">Enable camera to appear on screen</p>
+                  <button
+                    onClick={clearTurns}
+                    className="text-[10px] font-bold text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-md transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div ref={transcriptListRef} className="flex-1 min-h-0 overflow-y-auto p-5 pb-8">
+                  {turns.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                      <MessageCircle className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-xs font-medium">Transcription will appear here</p>
+                    </div>
+                  ) : (
+                    <>
+                      {turns.map((turn) => (
+                        <TranscriptBubble
+                          key={turn.id}
+                          speaker={turn.speaker}
+                          text={turn.text}
+                          persona={turn.persona ?? null}
+                          isLatest={turn.id === turns[turns.length - 1]?.id}
+                        />
+                      ))}
+                      <div ref={transcriptEndRef} />
+                    </>
+                  )}
                 </div>
               </div>
             )}
+            
+            {activeTab === "notes" && (
+              <div className="flex-1 p-5">
+                <textarea 
+                  className="w-full h-full resize-none outline-none text-sm text-slate-600 placeholder:text-slate-300"
+                  placeholder="Type your interview notes here..."
+                />
+              </div>
+            )}
+          </div>
 
-            {/* Agora overlay badge */}
-            <div className="absolute top-3 left-3 flex items-center gap-2">
-              <AgoraStatusBar
-                audioMuted={muteState.audioMuted}
-                videoMuted={muteState.videoMuted}
-                quality={quality}
-                screenSharing={false}
-                onToggleMic={async () => {
-                  const next = !muteState.audioMuted;
-                  await muteAudio(next);
-                  if (localStream) {
-                    localStream.getAudioTracks().forEach((t) => (t.enabled = !next));
-                  }
-                }}
-                onToggleVideo={async () => {
-                  const next = !muteState.videoMuted;
-                  await muteVideo(next);
-                  if (localStream) {
-                    localStream.getVideoTracks().forEach((t) => (t.enabled = !next));
-                  }
-                }}
-                onToggleScreen={() => {}}
-              />
-            </div>
-
-            {/* Candidate name overlay */}
-            <div className="absolute bottom-3 left-3">
-              <div className="bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
-                  <span className="text-white text-[10px] font-bold">C</span>
-                </div>
-                <span className="text-xs text-white/80 font-medium">{candidateName || "Candidate"}</span>
+          {/* Bottom Half: Summary / Objectives */}
+          <div className="h-[200px] flex-shrink-0 bg-white rounded-3xl shadow-sm border border-slate-200/60 p-5 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-blue-800">
+                <ListTodo className="w-5 h-5" />
+                <h3 className="font-bold">Interview Summary</h3>
+              </div>
+              <div className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                Updated
               </div>
             </div>
-
-            {/* Recording indicator */}
-            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1">
-              <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="text-[10px] text-slate-300 uppercase tracking-wider font-medium">Recording</span>
+            <div className="flex-1 bg-slate-50 rounded-2xl border border-slate-100 p-4 flex flex-col items-center justify-center text-center gap-3">
+               <p className="text-sm font-semibold text-slate-700">Listening for key points...</p>
+               <p className="text-xs text-slate-500">
+                 I will summarize the detected technical concepts and behavioral traits here as we talk.
+               </p>
             </div>
           </div>
 
-          {/* Bottom controls bar */}
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {/* Current persona indicator */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-lg border border-white/5">
-                <PersonaAvatar persona={currentPersona} size="sm" />
-                <div className="text-xs">
-                  <p className="text-white font-medium leading-tight">{currentPersonaMeta.name}</p>
-                  <p
-                    className="leading-tight"
-                    style={{ color: currentPersonaMeta.color }}
-                  >
-                    {currentPersonaMeta.label}
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress */}
-              <div className="hidden sm:flex items-center gap-1.5 ml-2 px-3 py-1.5 bg-slate-800/60 rounded-lg border border-white/5">
-                <div className="flex -space-x-1">
-                  {(["technical", "product", "hiring_manager", "behavioral"] as PersonaKey[]).map((p, i) => {
-                    const isActive = p === currentPersona;
-                    return (
-                      <div
-                        key={p}
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                          isActive
-                            ? "ring-2 ring-white/50 scale-110"
-                            : "opacity-50"
-                        }`}
-                        style={{
-                          backgroundColor: PERSONAS[p].color,
-                          color: "#fff",
-                        }}
-                      >
-                        {PERSONAS[p].name.charAt(0)}
-                      </div>
-                    );
-                  })}
-                </div>
-                <span className="text-[10px] text-slate-500 ml-1.5">
-                  {["technical", "product", "hiring_manager", "behavioral"].indexOf(currentPersona) + 1}/4
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Interrupt button */}
-              <button
-                onClick={raiseInterrupt}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300 hover:bg-amber-500/20 transition-all"
-              >
-                <Send className="w-3 h-3" />
-                Interrupt
-              </button>
-
-              {/* Mic status */}
-              <button
-                onClick={async () => {
-                  const next = !muteState.audioMuted;
-                  await muteAudio(next);
-                  if (localStream) {
-                    localStream.getAudioTracks().forEach((t) => (t.enabled = !next));
-                  }
-                }}
-                className={`p-2 rounded-lg transition-all ${
-                  muteState.audioMuted
-                    ? "bg-rose-500/20 text-rose-400 hover:bg-rose-500/30"
-                    : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-                }`}
-                title={muteState.audioMuted ? "Unmute" : "Mute"}
-              >
-                {muteState.audioMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
         </div>
-      </div>
-
-      {/* Dev mode toast */}
-      {devMode && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className="bg-slate-800/90 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5 text-xs text-slate-400 flex items-center gap-2 shadow-lg">
-            <Volume2 className="w-3.5 h-3.5 text-slate-500" />
-            Dev mode — Agora is simulated
-          </div>
-        </div>
-      )}
+      </main>
     </div>
   );
 }

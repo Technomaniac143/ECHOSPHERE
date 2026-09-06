@@ -1,4 +1,5 @@
-import type { IAgoraRTCClient, IMicrophoneAudioTrack, ICameraVideoTrack, IRemoteUser } from "agora-rtc-sdk-ng";
+import type { IAgoraRTCClient, IMicrophoneAudioTrack, ICameraVideoTrack } from "agora-rtc-sdk-ng";
+type IRemoteUser = any;
 
 export const RtcConnectionState: any = {
   DISCONNECTED: 1,

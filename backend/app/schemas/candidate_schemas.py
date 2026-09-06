@@ -19,6 +19,11 @@ class CandidateProfileBase(BaseModel):
     github_url: Optional[str] = None
     leetcode_url: Optional[str] = None
     skills: Optional[str] = None  # JSON string
+    education: Optional[str] = None  # JSON string
+    certifications: Optional[str] = None  # JSON string
+    system_checks: Optional[str] = None  # JSON string
+    sample_video_url: Optional[str] = None
+    analysis_result: Optional[str] = None  # JSON string
 
 
 class CandidateProfileRequest(CandidateProfileBase):
@@ -30,6 +35,44 @@ class CandidateProfileResponse(CandidateProfileBase):
     role: str = "student"
     created_at: datetime
     resume_url: Optional[str] = None
+
+
+# --- System Check & Analysis Schemas ---
+class SystemCheckRequest(BaseModel):
+    camera: bool
+    microphone: bool
+    screen_share: bool
+    network: bool
+    network_latency_ms: Optional[int] = None
+
+
+class SystemCheckResponse(BaseModel):
+    status: str  # "PASS" | "FAIL"
+    camera: str  # "PASS" | "FAIL"
+    microphone: str  # "PASS" | "FAIL"
+    screen_share: str  # "PASS" | "FAIL"
+    network: str  # "PASS" | "FAIL"
+    message: str
+
+
+class SampleVideoSubmitRequest(BaseModel):
+    duration_seconds: float
+    question: str = "What is your favourite colour?"
+    video_base64: Optional[str] = None
+
+
+class AnalysisResultResponse(BaseModel):
+    status: str  # "APPROVED" | "REJECTED"
+    camera_status: str
+    camera_details: str
+    microphone_status: str
+    microphone_details: str
+    screen_share_status: str
+    screen_share_details: str
+    video_recording_status: str
+    video_recording_details: str
+    duration_seconds: float
+    overall_recommendation: str
 
 
 # --- Resume ---

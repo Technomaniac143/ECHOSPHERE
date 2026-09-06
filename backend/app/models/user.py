@@ -40,6 +40,11 @@ class User(Base):
     portfolio_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     github_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     leetcode_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    education: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
+    certifications: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
+    system_checks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
+    sample_video_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    analysis_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
 
     # Organization fields
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

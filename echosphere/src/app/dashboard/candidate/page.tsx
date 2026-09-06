@@ -589,10 +589,11 @@ export default function CandidateDashboardPage() {
                 <CardContent>
                   {profile.skills && profile.skills.length > 0 ? (
                     <SkillsSection
-                      skills={profile.skills.map((s: string) => ({
-                        name: s,
-                        category: "technical",
-                      }))}
+                      skills={profile.skills.map((s: any) =>
+                        typeof s === "string"
+                          ? { name: s, category: "technical" }
+                          : { name: s.name, category: s.category || "technical" }
+                      )}
                       category="Technical Skills"
                     />
                   ) : (

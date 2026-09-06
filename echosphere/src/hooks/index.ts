@@ -57,7 +57,10 @@ export function useAgora(
       const instance = createAgoraClientWithMode(devMode);
       facadeRef.current = instance;
       setFacade(instance);
-      await instance.initialize({ appId: process.env.AGORA_APP_ID ?? "", deviceUserId: 1 });
+      await instance.initialize({
+        appId: process.env.NEXT_PUBLIC_AGORA_APP_ID ?? process.env.AGORA_APP_ID ?? "",
+        deviceUserId: 1,
+      });
       setLoading(false);
       onReadyRef.current?.();
     } catch (err) {
@@ -187,25 +190,43 @@ export function useAgora(
 
 // ---------- Transcript / live-captions hook ----------
 
+type TranscriptTurn = {
+  id: string;
+  speaker: "candidate" | "agent";
+  persona?: PersonaKey | null;
+  text: string;
+  tsStart: string;
+  tsEnd?: string | null;
+};
+
 export function useTranscript() {
-  const [turns, setTurns] = useState<Array<{
-    id: string;
-    speaker: "candidate" | "agent";
-    persona?: PersonaKey | null;
-    text: string;
-    tsStart: string;
-    tsEnd?: string | null;
-  }>>([]);
+  const [turns, setTurns] = useState<TranscriptTurn[]>([]);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [thinking, setThinking] = useState(false);
   const pendingRef = useRef<string[]>([]);
 
-  const push = useCallback((turn: typeof turns[0]) => {
+  const replaceAll = useCallback((next: TranscriptTurn[]) => {
+    pendingRef.current = next.map((t) => t.id);
+    setTurns(next);
+  }, []);
+
+  const push = useCallback((turn: TranscriptTurn) => {
     setTurns((prev) => {
+      const idx = prev.findIndex((t) => t.id === turn.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], ...turn };
+        return updated;
+      }
       pendingRef.current.push(turn.id);
       return [...prev, turn];
     });
+  }, []);
+
+  const clearTurns = useCallback(() => {
+    setTurns([]);
+    pendingRef.current = [];
   }, []);
 
   const markSpeaking = useCallback((speaker: "candidate" | "agent", on: boolean) => {
@@ -217,7 +238,7 @@ export function useTranscript() {
 
   const markThinking = useCallback((on: boolean) => setThinking(on), []);
 
-  return { turns, listening, speaking, thinking, push, markSpeaking, markThinking };
+  return { turns, listening, speaking, thinking, push, replaceAll, clearTurns, markSpeaking, markThinking };
 }
 
 // ---------- Whiteboard state hook ----------
