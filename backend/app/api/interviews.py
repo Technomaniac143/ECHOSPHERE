@@ -34,12 +34,13 @@ async def list_interviews(
         return [
             {
                 "id": i.id,
-                "mode": i.mode,
                 "target_role": i.target_role,
                 "target_company": i.target_company,
+                "target_domain": i.target_domain,
                 "status": i.status,
                 "started_at": i.started_at,
                 "ended_at": i.ended_at,
+                "created_at": i.created_at,
                 "overall_score": i.overall_score,
             }
             for i in interviews

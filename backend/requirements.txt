@@ -12,8 +12,8 @@ python-multipart==0.0.9
 httpx==0.27.0
 
 # MCP Server
-mcp==0.1.0
-mcp-server==0.1.0
+mcp
+mcp-server
 
 # Gemini API
 google-generativeai==0.3.0
