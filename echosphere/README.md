@@ -111,7 +111,6 @@ Open **two separate terminals**:
 **Terminal 1 — Backend:**
 ```bash
 cd backend
-venv\Scripts\activate
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
