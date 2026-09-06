@@ -18,10 +18,12 @@ engine_kwargs = {
 }
 if "sqlite" not in settings.database_url:
     engine_kwargs.update({
-        "pool_size": 20,
+        "pool_size": 5,
         "max_overflow": 10,
         "pool_pre_ping": True,
-        "pool_recycle": 3600,
+        "pool_recycle": 300,
+        # Required for Supabase/pgBouncer transaction pooler
+        "connect_args": {"statement_cache_size": 0},
     })
 
 db_url = settings.database_url
