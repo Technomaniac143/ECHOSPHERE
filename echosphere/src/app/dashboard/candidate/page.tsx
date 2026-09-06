@@ -178,21 +178,18 @@ export default function CandidateDashboardPage() {
   const completedCount = interviews.filter((s) => s.status === "completed").length;
 
   // Average score comes from real reports via analytics — not Math.random()
-  const avgScore =
-    analyticsData?.session_history
-      .filter((s) => s.overall_score !== null)
-      .reduce(
-        (sum, s, _, arr) => sum + (s.overall_score ?? 0) / arr.length,
-        0
-      ) ?? null;
+  const scoredSessions = analyticsData?.session_history?.filter((s) => s.overall_score !== null) ?? [];
+  const avgScore = scoredSessions.length > 0
+    ? scoredSessions.reduce((sum, s) => sum + (s.overall_score ?? 0), 0) / scoredSessions.length
+    : null;
 
   // Competency scores from real backend — null means "no data yet"
   const competencyScores = analyticsData?.competency_scores ?? null;
 
-  const strongest = competencyScores
+  const strongest = competencyScores && competencyScores.length > 0
     ? competencyScores.reduce((a, b) => (a.score > b.score ? a : b))
     : null;
-  const weakest = competencyScores
+  const weakest = competencyScores && competencyScores.length > 0
     ? competencyScores.reduce((a, b) => (a.score < b.score ? a : b))
     : null;
 
@@ -412,7 +409,7 @@ export default function CandidateDashboardPage() {
                         </p>
                       </div>
                     </div>
-                  ) : competencyScores ? (
+                  ) : competencyScores && competencyScores.length > 0 ? (
                     <>
                       <div className="flex items-center justify-center">
                         <RadarChart data={competencyScores} size={240} />
