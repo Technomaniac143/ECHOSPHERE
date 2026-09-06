@@ -45,6 +45,14 @@ async def list_interviews(
         if not interviews:
             return []
 
+        # Batch-fetch candidate names/emails for the sessions we found.
+        from app.models.user import User
+        candidate_ids = {i.candidate_id for i in interviews if getattr(i, "candidate_id", None)}
+        candidates_by_id: dict[str, User] = {}
+        if candidate_ids:
+            users_q = await db.execute(select(User).where(User.id.in_(candidate_ids)))
+            candidates_by_id = {u.id: u for u in users_q.scalars().all()}
+
         results = []
         for i in interviews:
             report_score = None
@@ -52,6 +60,7 @@ async def list_interviews(
                 report_score = float(i.report.overall_score)
 
             status_val = i.status.value if hasattr(i.status, "value") else str(i.status)
+            candidate = candidates_by_id.get(getattr(i, "candidate_id", None))
 
             results.append({
                 "id": i.id,
@@ -63,6 +72,9 @@ async def list_interviews(
                 "ended_at": i.ended_at,
                 "created_at": i.created_at,
                 "overall_score": report_score,
+                "candidate_id": getattr(i, "candidate_id", None),
+                "candidate_name": candidate.name if candidate else None,
+                "candidate_email": candidate.email if candidate else None,
                 # Frontend convenience aliases
                 "company": i.target_company,
                 "role": i.target_role,

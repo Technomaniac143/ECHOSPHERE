@@ -93,6 +93,19 @@ export interface OrgCandidate {
   createdAt: string;
 }
 
+export interface QuestionBankItem {
+  id: string;
+  question: string;
+  category: string;
+  difficulty: string;
+  expectedCompetency?: string | null;
+  role?: string | null;
+  domain?: string | null;
+  expectedAnswer?: string | null;
+  organizationId: string;
+  createdAt: string;
+}
+
 export interface Assessment {
   id: string;
   name: string;

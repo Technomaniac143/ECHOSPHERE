@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   RadarChart,
   BarChart,
@@ -136,12 +137,30 @@ const COMPETENCY_COLORS: Record<string, string> = {
 // ── Component ──
 
 export default function ReportPage() {
+  const router = useRouter();
   const params = useParams();
   const sessionId = params.sessionId as string;
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeEvidence, setActiveEvidence] = useState<EvidenceLink | null>(null);
+
+  const handleDownloadReport = () => {
+    const reportData = report ?? SAMPLE_REPORT;
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `interview_report_${sessionId || "summary"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  };
 
   useEffect(() => {
     // Fetch report from API
@@ -671,12 +690,19 @@ export default function ReportPage() {
         </Card>
 
         {/* Actions */}
-        <div className="flex gap-4">
-          <Button className="flex-1 bg-blue-600 hover:bg-blue-700">
+        <div className="flex gap-4 print:hidden">
+          <Button
+            onClick={handleDownloadReport}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all active:scale-[0.98]"
+          >
             Download Report
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-          <Button variant="outline" className="border-white/10 text-zinc-400 hover:text-white">
+          <Button
+            variant="outline"
+            className="flex-1 border-white/10 text-zinc-400 hover:text-white font-medium shadow-md transition-all active:scale-[0.98]"
+            onClick={() => router.push("/dashboard/candidate")}
+          >
             Back to Dashboard
           </Button>
         </div>

@@ -41,10 +41,28 @@ export default function OrganizationDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      organizationApi.get("current").catch(() => null).then((r) => r && setOrg(r.data)),
-      organizationApi.candidates().then((r) => setCandidates(r.data ?? [])),
-      organizationApi.assessments().then((r) => setAssessments(r.data ?? [])),
-      organizationApi.analytics().then((r) => setAnalytics(r.data)).catch(() => {}),
+      organizationApi
+        .getMy()
+        .then((r) => setOrg((r as any)?.data ?? r ?? null))
+        .catch(() => null),
+      organizationApi
+        .candidates()
+        .then((r) => {
+          const list = (r as any)?.candidates ?? (r as any)?.data ?? (Array.isArray(r) ? r : []);
+          setCandidates(list);
+        })
+        .catch(() => setCandidates([])),
+      organizationApi
+        .assessments()
+        .then((r) => {
+          const list = Array.isArray(r) ? r : (r as any)?.data ?? [];
+          setAssessments(list);
+        })
+        .catch(() => setAssessments([])),
+      organizationApi
+        .analytics()
+        .then((r) => setAnalytics((r as any)?.data ?? r ?? null))
+        .catch(() => null),
     ]).finally(() => setLoading(false));
   }, []);
 

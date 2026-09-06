@@ -77,19 +77,6 @@ async def get_my_organization(
     return org
 
 
-@router.get("/{org_id}", response_model=OrganizationResponse)
-async def get_organization(
-    org_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> Organization:
-    """Get organization by ID."""
-    result = await db.execute(select(Organization).where(Organization.id == org_id))
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-    return org
-
-
 # ── Question Bank ─────────────────────────────────────────────────────────────
 
 @router.post("/question-bank", response_model=QuestionBankResponse, status_code=status.HTTP_201_CREATED)
@@ -352,6 +339,26 @@ async def get_candidate(
         "skills": user.skills,
         "interviews": interview_history,
     }
+
+
+# ── Generic org-by-id lookup ───────────────────────────────────────────────────
+# NOTE: must stay LAST among GET routes on this router. Because Starlette matches
+# routes in registration order (not by specificity), a path-param route like
+# "/{org_id}" registered earlier would shadow every literal route below it
+# (e.g. GET /organizations/candidates would resolve org_id="candidates" instead
+# of hitting list_candidates). Keep any new literal GET routes above this one.
+
+@router.get("/{org_id}", response_model=OrganizationResponse)
+async def get_organization(
+    org_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Organization:
+    """Get organization by ID."""
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    return org
 
 
 # ── Analytics (batch) ─────────────────────────────────────────────────────────

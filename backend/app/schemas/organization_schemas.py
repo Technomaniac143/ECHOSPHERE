@@ -107,7 +107,7 @@ class CandidateBrief(BaseModel):
     id: str
     name: str
     email: str
-    role: str
+    role: Optional[str] = None
     domain: Optional[str] = None
     interview_date: Optional[str] = None
     overall_score: Optional[float] = None
@@ -116,7 +116,9 @@ class CandidateBrief(BaseModel):
     behavioral_score: Optional[float] = None
     leadership_score: Optional[float] = None
     integrity_flags: int = 0
-    status: str
+    status: str = "registered"
+    session_count: Optional[int] = 0
+
 
 
 class CandidateListResponse(BaseModel):

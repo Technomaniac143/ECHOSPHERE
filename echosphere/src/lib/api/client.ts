@@ -188,13 +188,37 @@ export const setupApi = {
     api.post<{ data: import("@/types").InterviewSetup }>("/api/setup/parse", body),
 };
 
+// The backend returns question-bank items as raw snake_case JSON (no camelCase
+// transform layer exists anywhere in this codebase) — this matches
+// QuestionBankResponse in backend/app/schemas/organization_schemas.py exactly.
+export interface RawQuestion {
+  id: string;
+  question: string;
+  category: string;
+  difficulty: string;
+  expected_competency?: string | null;
+  role?: string | null;
+  domain?: string | null;
+  expected_answer?: string | null;
+  organization_id: string;
+  created_at: string;
+}
+
 export const organizationApi = {
   create: (body: Partial<import("@/types").Organization>) =>
     api.post<{ data: import("@/types").Organization }>("/api/organizations", body),
   get: (id: string) => api.get<{ data: import("@/types").Organization }>(`/api/organizations/${id}`),
-  questions: () => api.get<{ data: import("@/types").Organization[] }>("/api/organizations/question-bank"),
-  addQuestion: (body: unknown) =>
-    api.post<{ data: { id: string } }>("/api/organizations/question-bank", body),
+  getMy: () => api.get<{ data: import("@/types").Organization }>("/api/organizations/my"),
+  questions: () => api.get<RawQuestion[]>("/api/organizations/question-bank"),
+  addQuestion: (body: {
+    question: string;
+    category: string;
+    difficulty?: string;
+    expected_competency?: string;
+    role?: string;
+    domain?: string;
+    expected_answer?: string;
+  }) => api.post<RawQuestion>("/api/organizations/question-bank", body),
   assessments: () => api.get<{ data: import("@/types").Assessment[] }>("/api/organizations/assessments"),
   createAssessment: (body: Partial<import("@/types").Assessment>) =>
     api.post<{ data: import("@/types").Assessment }>("/api/organizations/assessments", body),
