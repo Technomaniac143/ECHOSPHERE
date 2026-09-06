@@ -10,7 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from app.config import settings
 from app.database import init_db, close_db, get_db_context
 from app.api import auth, candidates, organizations, interviews, reports, sessions, analytics
+from app.schemas.candidate_schemas import SetupParseRequest
 from app.mcp.whiteboard_server import serve as mcp_serve
+
 
 
 @asynccontextmanager
@@ -134,7 +136,14 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 
+# Direct alias for frontend /api/setup/parse
+@app.post("/api/setup/parse", tags=["candidate"])
+async def parse_setup_alias(request: SetupParseRequest):
+    """Alias for setup parsing endpoint directly at /api/setup/parse."""
+    return await candidates.parse_setup(request)
+
 # ── Health check ──
+
 @app.get("/health", tags=["health"])
 async def health_check():
     """Health check endpoint."""

@@ -132,7 +132,7 @@ Rules:
 Return ONLY the JSON object. No markdown, no explanation."""
 
         response = await client.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
             params={"key": self._api_key},
             headers={"Content-Type": "application/json"},
             json={

@@ -7,17 +7,26 @@ from pydantic import BaseModel, Field
 class SessionBase(BaseModel):
     mode: str = "practice"  # practice | assessment
     panel_id: Optional[str] = None
-    target_role: str
+    target_role: Optional[str] = "Software Engineer"
     target_company: Optional[str] = None
     target_domain: Optional[str] = None
+    # Flexible field aliases
+    role: Optional[str] = None
+    company: Optional[str] = None
+    domain: Optional[str] = None
+    targetRole: Optional[str] = None
+    targetCompany: Optional[str] = None
     
 
 class SessionCreateRequest(SessionBase):
     candidate_id: Optional[str] = None
     org_id: Optional[str] = None
-    persona_list: list[str] = Field(default_factory=lambda: ["technical", "product", "hiring_manager", "behavioral"])
+    persona_list: Optional[list[str]] = None
+    personas: Optional[list[str]] = None
     difficulty_seed: Optional[dict] = None
-    interview_duration_minutes: int = 20
+    difficulty: Optional[str] = None
+    interview_duration_minutes: Optional[int] = 20
+    estimated_duration: Optional[int] = 20
     assessment_id: Optional[str] = None
 
 
@@ -28,13 +37,15 @@ class SessionCreateResponse(SessionBase):
     agora_channel_name: Optional[str] = None
     agora_agent_id: Optional[str] = None
     agora_token: Optional[str] = None
-    persona_list: list[str]
+    persona_list: list[str] = Field(default_factory=list)
     difficulty_seed: Optional[dict] = None
-    interview_duration_minutes: int
+    interview_duration_minutes: int = 20
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    data: Optional[dict[str, Any]] = None
+
 
 
 class SessionListResponse(BaseModel):

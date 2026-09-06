@@ -137,7 +137,8 @@ class InterviewSetupResponse(BaseModel):
     est_duration_minutes: int
     focus_areas: list[str]
     suggested_questions: list[str] = []
-    confirmation_message: str
+    confirmation_message: str = "Interview setup successfully configured."
+
 
 
 class InterviewConfirmationRequest(BaseModel):

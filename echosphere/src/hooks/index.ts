@@ -14,7 +14,7 @@ import type { PersonaKey } from "@/types";
 
 export type { ConnectionQuality, AgoraFacade, AgoraMuteState, AgoraDeviceState, RtcUser };
 
-export const AGORA_DEV_MODE = !process.env.AGORA_APP_ID;
+export const AGORA_DEV_MODE = false;
 
 export function useAgora(
   enabled = true,
@@ -40,27 +40,34 @@ export function useAgora(
   const [joinedUsers, setJoinedUsers] = useState<Map<number, RtcUser>>(new Map());
   const facadeRef = useRef<AgoraFacade | null>(null);
   const usersRef = useRef<Map<number, RtcUser>>(new Map());
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  // Keep refs current without adding callbacks to dep arrays
+  useEffect(() => { onReadyRef.current = onReady; onErrorRef.current = onError; });
 
   const devMode = AGORA_DEV_MODE;
+  const initDoneRef = useRef(false);
 
   const initialize = useCallback(async () => {
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const instance = createAgoraClientWithMode(devMode);
       facadeRef.current = instance;
       setFacade(instance);
-
       await instance.initialize({ appId: process.env.AGORA_APP_ID ?? "", deviceUserId: 1 });
       setLoading(false);
-      onReady?.();
+      onReadyRef.current?.();
     } catch (err) {
       setLoading(false);
       const message = err instanceof Error ? err.message : "Failed to initialize Agora";
       setError(message);
-      onError?.(err instanceof Error ? err : new Error(message));
+      onErrorRef.current?.(err instanceof Error ? err : new Error(message));
     }
-  }, [devMode, onReady, onError]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devMode]);
 
   useEffect(() => {
     if (!facade) return;
@@ -361,25 +368,37 @@ export function useInterrupt(
 export function usePreparationTimer(seconds: number) {
   const [remaining, setRemaining] = useState(seconds);
   const [expired, setExpired] = useState(false);
+  const [started, setStarted] = useState(false);
 
+  // Run countdown only when started
   useEffect(() => {
+    if (!started) return;
     if (remaining <= 0) {
       setExpired(true);
       return;
     }
     const id = setInterval(() => {
-      setRemaining((prev) => Math.max(0, prev - 1));
+      setRemaining((prev) => {
+        const next = Math.max(0, prev - 1);
+        if (next === 0) setExpired(true);
+        return next;
+      });
     }, 1000);
     return () => clearInterval(id);
-  }, [remaining]);
+  // Only re-run when started changes — NOT when remaining changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started]);
 
   const reset = useCallback(() => {
     setRemaining(seconds);
     setExpired(false);
+    setStarted(false);
   }, [seconds]);
 
   const start = useCallback(() => {
     setRemaining(seconds);
+    setExpired(false);
+    setStarted(true);
   }, [seconds]);
 
   return { remaining, expired, reset, start };

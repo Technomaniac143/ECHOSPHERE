@@ -54,17 +54,18 @@ export function AgoraVideo({
         ref={videoRef}
         autoPlay
         playsInline
-        muted={!stream}
+        muted
         className={cn(
           "w-full h-full object-cover",
           mirror && "scale-x-[-1]",
         )}
       />
-      {placeholder && (
+      {!stream && placeholder && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-800/60 backdrop-blur-sm">
           {placeholder}
         </div>
       )}
+
       {showLabel && (
         <div className="absolute bottom-2 left-2 text-[10px] uppercase tracking-wider text-white/70 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur">
           {stream ? "Candidate" : "Waiting for camera"}
@@ -99,6 +100,15 @@ export function AgoraVideoProvider({
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (initialStream) {
+      setStream(initialStream);
+      setLoading(false);
+      setError(null);
+    }
+  }, [initialStream]);
+
 
   const request = useCallback(async () => {
     setLoading(true);

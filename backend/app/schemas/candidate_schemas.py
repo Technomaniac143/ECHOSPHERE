@@ -1,6 +1,6 @@
 """Pydantic schemas for candidate operations."""
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, EmailStr
@@ -65,19 +65,33 @@ class CertificateResponse(BaseModel):
 
 # --- Setup / Interview Configuration ---
 class SetupParseRequest(BaseModel):
-    user_input: str
+    user_input: Optional[str] = None
+    company: Optional[str] = None
+    role: Optional[str] = None
+    domain: Optional[str] = None
+    resumeText: Optional[str] = None
     mode: str = "practice"  # "practice" or "assessment"
     existing_profile: Optional[dict] = None
 
 
 class SetupParseResponse(BaseModel):
-    target_role: str
+    target_role: Optional[str] = None
     target_company: Optional[str] = None
     target_company_type: Optional[str] = None
-    panel: list[str]
-    difficulty_seed: dict
-    est_duration_minutes: int
-    focus_areas: list[str]
+    panel: list[str] = Field(default_factory=list)
+    difficulty_seed: dict = Field(default_factory=dict)
+    est_duration_minutes: int = 20
+    focus_areas: list[str] = Field(default_factory=list)
+    # Frontend aliases
+    suggestedPersonas: Optional[list[str]] = None
+    estimatedDuration: Optional[int] = None
+    focusAreas: Optional[list[str]] = None
+    difficulty: Optional[str] = "Medium"
+    company: Optional[str] = None
+    role: Optional[str] = None
+    domain: Optional[str] = None
+    data: Optional[dict[str, Any]] = None
+
 
 
 class InterviewSetupConfirmRequest(BaseModel):

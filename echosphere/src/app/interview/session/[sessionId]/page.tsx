@@ -194,6 +194,9 @@ export default function SessionPage() {
   const [currentQuestion, setCurrentQuestion] = useState("Hi there! I'm Alex, your technical interviewer. Let's start with a warm-up — tell me about a technical project you're most proud of and why.");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [candidateName, setCandidateName] = useState("Candidate");
+  const sessionInitDone = useRef(false);
+  const mediaInitDone = useRef(false);
+
 
   // Mock questions for each persona
   const QUESTIONS: Record<PersonaKey, string[]> = {
@@ -238,25 +241,27 @@ export default function SessionPage() {
     ],
   };
 
-  // Initialize
+  // Initialize — guarded with ref to prevent re-runs from unstable useCallback refs
   useEffect(() => {
+    if (sessionInitDone.current) return;
+    sessionInitDone.current = true;
     const init = async () => {
       await initialize();
       await requestDevices();
       try {
-        const session = await sessionApi.get(sessionId);
-        if ((session.data as any)?.company) {
-          // Extract candidate name from profile if available
-        }
+        await sessionApi.get(sessionId);
       } catch {}
       startTimer(durationMinutes);
       setPhaseState("calibration");
     };
     init();
-  }, [sessionId, initialize, requestDevices, startTimer, setPhaseState, durationMinutes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
-  // Request camera/mic for the session
+  // Request camera/mic for the session — runs once on mount
   useEffect(() => {
+    if (mediaInitDone.current) return;
+    mediaInitDone.current = true;
     const requestMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -266,13 +271,12 @@ export default function SessionPage() {
         setLocalStream(stream);
       } catch {}
     };
-    if (phase !== "completed" && phase !== "lobby") {
-      requestMedia();
-    }
+    requestMedia();
     return () => {
-      if (localStream) localStream.getTracks().forEach((t) => t.stop());
+      setLocalStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
     };
-  }, [phase, localStream]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Advance to next question / persona
   const advanceQuestion = useCallback(() => {

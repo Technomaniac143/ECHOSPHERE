@@ -237,18 +237,62 @@ async def upload_certificate(
 async def parse_setup(
     request: SetupParseRequest,
 ) -> dict:
-    """Parse free-text setup input into structured interview configuration."""
+    """Parse free-text or structured setup input into structured interview configuration."""
     setup_agent = SetupAgent()
     
+    # Synthesize user_input if not directly provided
+    user_input = request.user_input
+    if not user_input or not user_input.strip():
+        parts = []
+        if request.company:
+            parts.append(f"Company: {request.company}")
+        if request.role:
+            parts.append(f"Role: {request.role}")
+        if request.domain:
+            parts.append(f"Domain: {request.domain}")
+        if request.resumeText:
+            parts.append(f"Resume context: {request.resumeText[:500]}")
+        user_input = ", ".join(parts) if parts else "Software Engineer interview"
+
     try:
         config = await setup_agent.parse(
-            user_input=request.user_input,
+            user_input=user_input,
             mode=request.mode,
             existing_profile=request.existing_profile,
         )
-        return config
+        
+        suggested_personas = config.panel or ["technical", "behavioral"]
+        est_duration = config.est_duration_minutes or 20
+        focus_areas = config.focus_areas or ["Problem Solving", "System Design", "Communication"]
+        target_role = config.target_role or request.role or "Software Engineer"
+        target_company = config.target_company or request.company
+
+        payload = {
+            "target_role": target_role,
+            "target_company": target_company,
+            "target_company_type": config.target_company_type,
+            "panel": suggested_personas,
+            "difficulty_seed": config.difficulty_seed or {},
+            "est_duration_minutes": est_duration,
+            "focus_areas": focus_areas,
+            # Frontend aliases
+            "suggestedPersonas": suggested_personas,
+            "estimatedDuration": est_duration,
+            "focusAreas": focus_areas,
+            "difficulty": "Medium",
+            "company": target_company,
+            "role": target_role,
+            "domain": request.domain,
+        }
+        
+        # Dual-support: top level fields and nested data wrapper
+        return {
+            **payload,
+            "data": payload,
+        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Setup parsing failed: {str(e)}",
         )
+

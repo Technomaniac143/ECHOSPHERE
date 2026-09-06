@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api, setupApi, sessionApi } from "@/lib/api/client";
@@ -80,42 +80,53 @@ export default function SetupPage() {
   const [parsing, setParsing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-
-  const parseSetup = useCallback(async () => {
-    setParsing(true);
-    try {
-      const res = await setupApi.parse({
-        company: state.company && state.company !== "Other" ? state.company : state.customCompany,
-        role: state.role && state.role !== "Other" ? state.role : state.customRole,
-        domain: state.domain && state.domain !== "Other" ? state.domain : state.customDomain,
-      });
-      const setup: InterviewSetup = res.data;
-      setState((prev) => ({
-        ...prev,
-        suggestedPersonas: (setup.suggestedPersonas as PersonaKey[]) ?? [],
-        difficulty: (setup.difficulty as DifficultyLevel) ?? "Medium",
-        estimatedDuration: setup.estimatedDuration ?? 20,
-        focusAreas: setup.focusAreas ?? [],
-      }));
-    } catch (err) {
-      toast.error("Could not generate setup proposal. Using defaults.");
-      setState((prev) => ({
-        ...prev,
-        suggestedPersonas: ["technical", "behavioral"] as PersonaKey[],
-        difficulty: "Medium",
-        estimatedDuration: 20,
-        focusAreas: ["Problem Solving", "Communication"],
-      }));
-    } finally {
-      setParsing(false);
-    }
-  }, [state]);
+  const hasParsedRef = useRef(false);
 
   useEffect(() => {
-    if (step === 3) {
-      parseSetup();
+    if (step === 3 && !hasParsedRef.current) {
+      hasParsedRef.current = true;
+      const effectiveCompany =
+        state.company && state.company !== "Other" ? state.company : state.customCompany;
+      const effectiveRole =
+        state.role && state.role !== "Other" ? state.role : state.customRole;
+      const effectiveDomain =
+        state.domain && state.domain !== "Other" ? state.domain : state.customDomain;
+
+      setParsing(true);
+      setupApi
+        .parse({
+          company: effectiveCompany,
+          role: effectiveRole,
+          domain: effectiveDomain,
+        })
+        .then((res: any) => {
+          const setup = res?.data || res;
+          setState((prev) => ({
+            ...prev,
+            suggestedPersonas: (setup?.suggestedPersonas || setup?.panel || ["technical", "behavioral"]) as PersonaKey[],
+            difficulty: (setup?.difficulty as DifficultyLevel) || "Medium",
+            estimatedDuration: setup?.estimatedDuration || setup?.est_duration_minutes || 20,
+            focusAreas: (setup?.focusAreas || setup?.focus_areas || ["Problem Solving", "Communication"]),
+          }));
+        })
+        .catch((err) => {
+          console.error("Setup parsing fallback:", err);
+          toast.error("Could not generate setup proposal. Using defaults.");
+          setState((prev) => ({
+            ...prev,
+            suggestedPersonas: ["technical", "behavioral"] as PersonaKey[],
+            difficulty: "Medium",
+            estimatedDuration: 20,
+            focusAreas: ["Problem Solving", "Communication"],
+          }));
+        })
+        .finally(() => {
+          setParsing(false);
+        });
+    } else if (step !== 3) {
+      hasParsedRef.current = false;
     }
-  }, [step, parseSetup]);
+  }, [step, state.company, state.customCompany, state.role, state.customRole, state.domain, state.customDomain]);
 
   const next = () => {
     if (step < 4) setStep((s) => (s + 1) as StepIndex);
@@ -169,14 +180,22 @@ export default function SetupPage() {
         targetCompany: companyVal,
       });
 
+      const sessionObj = (session as any)?.data || session;
+      const targetSessionId = sessionObj?.id || sessionObj?.session_id;
+
       toast.success("Interview session created");
-      router.push(`/interview/lobby?sessionId=${session.data.id}`);
+      if (targetSessionId) {
+        router.push(`/interview/lobby?sessionId=${targetSessionId}`);
+      } else {
+        router.push(`/interview/lobby`);
+      }
     } catch (err) {
       toast.error("Failed to create session. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const personaColor: Record<PersonaKey, string> = {
     technical: "bg-blue-500",
